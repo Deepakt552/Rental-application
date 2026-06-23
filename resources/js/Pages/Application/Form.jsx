@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 export default function ApplicationForm({ sessionId: propSessionId }) {
-    const { type, auth } = usePage().props;
+    const { type, auth, initialApplicantId, initialStep } = usePage().props;
     const [currentStep, setCurrentStep] = useState(1);
     const [applicantId, setApplicantId] = useState(null);
     const [sessionId, setSessionId] = useState(propSessionId || crypto.randomUUID());
@@ -36,10 +36,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
     // Check if property details are set on load
     useEffect(() => {
-        const savedApplicantId = localStorage.getItem('applicant_id');
+        const idToLoad = initialApplicantId || localStorage.getItem('applicant_id');
         const savedApplication = localStorage.getItem('rental_application');
 
-        if (savedApplicantId) {
+        if (idToLoad) {
             setShowPropertyModal(false);
             return;
         }
@@ -960,15 +960,16 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     };
     // Load saved draft on page load
     useEffect(() => {
-        const savedApplicantId = localStorage.getItem('applicant_id');
-        if (savedApplicantId) {
-            safeFetch(`/api/application/applicant/${savedApplicantId}`)
+        const idToLoad = initialApplicantId || localStorage.getItem('applicant_id');
+        if (idToLoad) {
+            safeFetch(`/api/application/applicant/${idToLoad}`)
                 .then(res => res ? res.json() : null)
                 .then(result => {
                     if (result && result.success) {
                         setApplicantId(result.applicant_id);
                         setSessionId(result.session_id);
                         setCurrentStep(result.current_step);
+                        localStorage.setItem('applicant_id', result.applicant_id);
 
                         const fd = result.form_data;
                         if (fd.personal_info) setFormData(prev => ({ ...prev, personal_info: fd.personal_info }));
@@ -991,7 +992,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 })
                 .catch(err => console.error('Error loading draft:', err));
         }
-    }, []);
+    }, [initialApplicantId]);
 
 
 
@@ -1012,7 +1013,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             });
             if (!response) return;
             const result = await response.json();
-            if (result.exists) {
+            if (result.exists || result.has_draft) {
                 setErrors(prev => ({ ...prev, [`personal_info.email`]: result.message }));
             } else {
                 setErrors(prev => {
@@ -2367,7 +2368,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         <h4 className="font-bold text-slate-900 mb-1">Final Step: Document Upload</h4>
                         <p className="text-sm text-slate-600 leading-relaxed">
                             To process your application faster, please provide clear photos or PDF scans of the following documents.
-                            Supported formats: <span className="font-bold">PDF, JPG, PNG</span> (Max 10MB).
+                            Supported formats: <span className="font-bold">PDF, JPG, PNG</span> (Max 2MB).
                         </p>
                     </div>
                 </div>
@@ -2422,6 +2423,22 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                                     const files = Array.from(e.target.files);
 
                                                     if (files.length > 0) {
+                                                        const invalidFiles = files.filter(f => f.size > 2 * 1024 * 1024);
+                                                        if (invalidFiles.length > 0) {
+                                                            toast.error('Each file must be less than 2MB');
+                                                            setErrors(prev => ({
+                                                                ...prev,
+                                                                [`documents.${doc.id}`]: 'Each file must be less than 2MB'
+                                                            }));
+                                                            return;
+                                                        }
+
+                                                        setErrors(prev => {
+                                                            const newErrors = { ...prev };
+                                                            delete newErrors[`documents.${doc.id}`];
+                                                            return newErrors;
+                                                        });
+
                                                         setFormData(prev => ({
                                                             ...prev,
                                                             documents: {
@@ -2587,12 +2604,26 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     </div>
                                     <span className="mt-2 text-xs font-bold text-slate-700">Drop your file here, or <span className="text-blue-600">browse</span></span>
                                     <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
-                                        if (e.target.files[0]) {
+                                        const file = e.target.files[0];
+                                        if (file) {
+                                            if (file.size > 2 * 1024 * 1024) {
+                                                toast.error('File must be less than 2MB');
+                                                setErrors(prev => ({
+                                                    ...prev,
+                                                    'documents.other_source_of_income': 'File must be less than 2MB'
+                                                }));
+                                                return;
+                                            }
+                                            setErrors(prev => {
+                                                const newErrors = { ...prev };
+                                                delete newErrors['documents.other_source_of_income'];
+                                                return newErrors;
+                                            });
                                             setFormData(prev => ({
                                                 ...prev,
                                                 documents: {
                                                     ...prev.documents,
-                                                    other_source_of_income: { ...prev.documents.other_source_of_income, file: e.target.files[0] }
+                                                    other_source_of_income: { ...prev.documents.other_source_of_income, file: file }
                                                 }
                                             }));
                                         }
@@ -2623,6 +2654,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     </button>
                                 </div>
                             )}
+                            {errors['documents.other_source_of_income'] && <p className="text-red-500 text-[10px] mt-1 font-bold uppercase tracking-tight">{errors['documents.other_source_of_income']}</p>}
                         </div>
                     </div>
 
@@ -2655,10 +2687,24 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     </div>
                                     <span className="mt-2 text-xs font-bold text-slate-700">Drop your file here, or <span className="text-blue-600">browse</span></span>
                                     <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
-                                        if (e.target.files[0]) {
+                                        const file = e.target.files[0];
+                                        if (file) {
+                                            if (file.size > 2 * 1024 * 1024) {
+                                                toast.error('File must be less than 2MB');
+                                                setErrors(prev => ({
+                                                    ...prev,
+                                                    'documents.other': 'File must be less than 2MB'
+                                                }));
+                                                return;
+                                            }
+                                            setErrors(prev => {
+                                                const newErrors = { ...prev };
+                                                delete newErrors['documents.other'];
+                                                return newErrors;
+                                            });
                                             setFormData(prev => ({
                                                 ...prev,
-                                                documents: { ...prev.documents, other: { ...prev.documents.other, file: e.target.files[0] } }
+                                                documents: { ...prev.documents, other: { ...prev.documents.other, file: file } }
                                             }));
                                         }
                                     }} />
@@ -2688,6 +2734,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     </button>
                                 </div>
                             )}
+                            {errors['documents.other'] && <p className="text-red-500 text-[10px] mt-1 font-bold uppercase tracking-tight">{errors['documents.other']}</p>}
                         </div>
                     </div>
                 </div>

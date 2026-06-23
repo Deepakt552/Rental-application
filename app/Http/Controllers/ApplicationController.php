@@ -36,21 +36,51 @@ class ApplicationController extends Controller
         $this->emailService = $emailService;
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $sessionId = (string) Str::uuid();
         session(['consent_session_id' => $sessionId]);
 
+        $applicantId = $request->query('applicant_id');
+        $applicant = null;
+        if ($applicantId) {
+            $applicant = Applicant::find($applicantId);
+        }
+
+        if (!$applicant && Auth::check()) {
+            $applicant = Applicant::where('user_id', Auth::id())
+                ->where('status', 'draft')
+                ->latest()
+                ->first();
+        }
+
         return Inertia::render('Application/Form', [
             'type' => 'admin',
             'sessionId' => $sessionId,
+            'initialApplicantId' => $applicant ? $applicant->id : null,
+            'initialStep' => $applicant ? $applicant->current_step : null,
         ]);
     }
 
-    public function indexExcel()
+    public function indexExcel(Request $request)
     {
+        $applicantId = $request->query('applicant_id');
+        $applicant = null;
+        if ($applicantId) {
+            $applicant = Applicant::find($applicantId);
+        }
+
+        if (!$applicant && Auth::check()) {
+            $applicant = Applicant::where('user_id', Auth::id())
+                ->where('status', 'draft')
+                ->latest()
+                ->first();
+        }
+
         return Inertia::render('Application/Form', [
-            'type' => 'superadmin'
+            'type' => 'superadmin',
+            'initialApplicantId' => $applicant ? $applicant->id : null,
+            'initialStep' => $applicant ? $applicant->current_step : null,
         ]);
     }
 
@@ -570,13 +600,13 @@ class ApplicationController extends Controller
   
         $request->validate([
             'applicant_id' => 'required|exists:applicants,id',
-            'documents.driving_license' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
-            'documents.pay_check.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
-            'documents.bank_statement.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
-            'documents.social_security_card' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
-            'documents.other_source_of_income.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'documents.driving_license' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'documents.pay_check.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'documents.bank_statement.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'documents.social_security_card' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'documents.other_source_of_income.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'documents.other_source_of_income.description' => 'nullable|string',
-            'documents.other.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'documents.other.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'documents.other.description' => 'nullable|string'
         ]);
 
@@ -683,9 +713,9 @@ class ApplicationController extends Controller
                 }
             }
 
-            Applicant::where('id', $request->applicant_id)->update(['current_step' => 10]);
+            Applicant::where('id', $request->applicant_id)->update(['current_step' => 11]);
 
-            return response()->json(['success' => true, 'current_step' => 10]);
+            return response()->json(['success' => true, 'current_step' => 11]);
         } catch (\Exception $e) {
             Log::error('Step 10 save error: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);

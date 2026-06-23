@@ -333,10 +333,10 @@ class Applicant extends Model
                 'emergency_contact.phone' => 'required|string|max:20',
             ],
             10 => [
-                'documents.driving_license' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
-                'documents.pay_check' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
-                'documents.bank_statement' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
-                'documents.social_security_card' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
+                'documents.driving_license' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+                'documents.pay_check' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+                'documents.bank_statement' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+                'documents.social_security_card' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
             ],
         ];
 

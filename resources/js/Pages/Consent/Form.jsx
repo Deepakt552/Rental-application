@@ -393,14 +393,14 @@ export default function ConsentForm({ sessionId, step1Data, step2Data, step3Data
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-12">
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-12">
             <Toaster position="top-right" />
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="bg-white rounded-lg shadow-xl overflow-hidden">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl overflow-hidden border border-gray-100 dark:border-slate-700">
                     <div className="px-6 py-8">
                         <div className="text-center mb-8">
-                            <h1 className="text-3xl font-bold text-gray-900">Consent Forms</h1>
-                            <p className="text-gray-600 mt-2">
+                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Consent Forms</h1>
+                            <p className="text-gray-600 dark:text-slate-400 mt-2">
                                 Please complete the consent form to proceed with your application
                             </p>
                         </div>
@@ -408,7 +408,7 @@ export default function ConsentForm({ sessionId, step1Data, step2Data, step3Data
                         <Stepper steps={steps.map(s => s.title)} currentStep={currentStep} />
 
                         {error && (
-                            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded flex items-center gap-2">
+                            <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-300 rounded flex items-center gap-2">
                                 <span className="font-bold">Error:</span> {error}
                             </div>
                         )}
@@ -417,13 +417,13 @@ export default function ConsentForm({ sessionId, step1Data, step2Data, step3Data
                             {steps[currentStep].component}
                         </div>
 
-                        <div className="mt-8 flex justify-between items-center border-t pt-6">
+                        <div className="mt-8 flex justify-between items-center border-t dark:border-slate-700 pt-6">
                             <div>
                                 {currentStep > 0 && (
                                     <button
                                         onClick={handleBack}
                                         disabled={saving}
-                                        className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                        className="px-6 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50"
                                     >
                                         Back
                                     </button>
@@ -445,7 +445,7 @@ export default function ConsentForm({ sessionId, step1Data, step2Data, step3Data
                         </div>
 
                         {saving && (
-                            <div className="mt-4 text-center text-sm text-gray-500 animate-pulse">
+                            <div className="mt-4 text-center text-sm text-gray-500 dark:text-slate-400 animate-pulse">
                                 Saving your progress...
                             </div>
                         )}

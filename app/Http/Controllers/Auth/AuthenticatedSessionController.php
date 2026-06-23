@@ -32,12 +32,21 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
-          $user = $request->user();
-         if ($user->isAdmin()) {
+        $user = $request->user();
+        if ($user->isAdmin()) {
             return redirect()->intended(route('admin.dashboard'));
         }
 
-         return redirect()->intended('/');
+        $applicant = \App\Models\Applicant::where('user_id', $user->id)
+            ->where('status', 'draft')
+            ->latest()
+            ->first();
+
+        if ($applicant && $applicant->current_step < 11) {
+            return redirect()->route('home', ['resume' => 'true', 'applicant_id' => $applicant->id]);
+        }
+
+        return redirect()->intended(route('dashboard'));
 
         
          

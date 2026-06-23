@@ -19,11 +19,11 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
         post(route('payment.checkout', { applicant: applicant.id }));
     };
 
-    const isComplete = applicant?.current_step >= 10;
+    const isComplete = applicant?.current_step >= 11;
     const isPaid = applicant?.payment_status === 'paid';
 
     // Calculate progress percentage
-    const progress = applicant ? Math.round((applicant.current_step / 10) * 100) : 0;
+    const progress = applicant ? Math.min(100, Math.round(((applicant.current_step - 1) / 10) * 100)) : 0;
 
     return (
         <AuthenticatedLayout
@@ -49,7 +49,7 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                 </div>
                             </div>
                             <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-blue-50 dark:bg-blue-900/200 h-full transition-all duration-1000" style={{ width: `${progress}%` }}></div>
+                                <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${progress}%` }}></div>
                             </div>
                         </div>
 
@@ -102,8 +102,8 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                     (!applicant.is_consent_completed ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-900/30' : 'bg-brand/5 border-brand/10')
                                     }`}>
                                     <div className="flex items-start gap-5">
-                                        <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${!isComplete ? 'bg-orange-50 dark:bg-orange-900/200 text-white shadow-orange-500/30' :
-                                            (!applicant.is_consent_completed ? 'bg-amber-50 dark:bg-amber-900/200 text-white shadow-amber-500/30' : 'bg-brand text-white shadow-brand/30')
+                                        <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${!isComplete ? 'bg-orange-500 dark:bg-orange-600 text-white shadow-orange-500/30' :
+                                            (!applicant.is_consent_completed ? 'bg-amber-500 dark:bg-amber-600 text-white shadow-amber-500/30' : 'bg-brand text-white shadow-brand/30')
                                             }`}>
                                             {!isComplete ? <AlertCircle className="w-7 h-7" /> :
                                                 (!applicant.is_consent_completed ? <ShieldCheck className="w-7 h-7" /> : <CreditCard className="w-7 h-7" />)}
@@ -128,18 +128,18 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                     </div>
 
                                     {!isComplete ? (
-                                        <Link href="/rental-application" className="w-full md:w-auto px-8 py-4 bg-orange-50 dark:bg-orange-900/200 text-white font-bold rounded-xl hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-95">
+                                        <Link href="/rental-application" className="w-full md:w-auto px-4 py-2 text-sm bg-orange-500 dark:bg-orange-600 dark:hover:bg-orange-700 text-white font-bold rounded-xl hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-95">
                                             Continue Form <ArrowRight className="w-5 h-5" />
                                         </Link>
                                     ) : (!applicant.is_consent_completed ? (
-                                        <Link href="/consent" className="w-full md:w-auto px-8 py-4 bg-amber-50 dark:bg-amber-900/200 text-white font-bold rounded-xl hover:bg-amber-600 transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95">
+                                        <Link href="/consent" className="w-full md:w-auto px-4 py-2 text-sm bg-amber-500 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-bold rounded-xl hover:bg-amber-600 transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95">
                                             Complete Consent <ArrowRight className="w-5 h-5" />
                                         </Link>
                                     ) : (
                                         <button
                                             onClick={handlePayment}
                                             disabled={processing}
-                                            className="w-full md:w-auto px-10 py-4 bg-brand text-white font-bold rounded-xl hover:bg-brand-dark transition-all shadow-xl shadow-brand/20 flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
+                                            className="w-full md:w-auto px-4 py-2 text-sm bg-brand text-white font-bold rounded-xl hover:bg-brand-dark transition-all shadow-xl shadow-brand/20 flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
                                         >
                                             {processing
                                                 ? 'Processing...'
@@ -287,7 +287,7 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                                     <PlusCircle className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                                                     <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500 font-bold text-xl mb-2">No active application</p>
                                                     <p className="text-slate-400 dark:text-slate-500 max-w-sm mx-auto mb-8">Start your journey today and find your perfect home with Rental Application.</p>
-                                                    <Link href="/rental-application" className="inline-flex items-center gap-2 px-8 py-3 bg-brand text-white font-bold rounded-lg hover:bg-brand-dark transition-all">
+                                                    <Link href="/rental-application" className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-brand text-white font-bold rounded-lg hover:bg-brand-dark transition-all">
                                                         Get Started <ArrowRight className="w-4 h-4" />
                                                     </Link>
                                                 </div>
