@@ -110,29 +110,38 @@ class PDFService
             }
 
             // 3. Add uploaded Documents
-            if ($applicant->documents) {
-                foreach ($applicant->documents as $doc) {
-                    $fullDocPath = storage_path('app/public/' . $doc->file_path);
-                    if (file_exists($fullDocPath)) {
-                        $mime = strtolower($doc->mime_type);
-                        if ($mime === 'application/pdf') {
-                            $compatDocPath = $this->ensureCompatiblePdf($fullDocPath, $tempFiles);
-                            $merger->addFile($compatDocPath);
-                        } elseif (in_array($mime, ['image/jpeg', 'image/jpg', 'image/png'])) {
-                            // Dynamically convert image to PDF
-                            $tempImagePdfPath = storage_path('app/temp/img_doc_' . uniqid() . '.pdf');
-                            $tempFiles[] = $tempImagePdfPath;
-                            $imageData = base64_encode(file_get_contents($fullDocPath));
-                            $src = 'data:' . $mime . ';base64,' . $imageData;
-                            
-                            $html = '<html><body style="margin:0;padding:20px;text-align:center;"><h3 style="font-family:sans-serif;color:#333;">Document: ' . htmlspecialchars($doc->original_filename) . '</h3><img src="' . $src . '" style="max-width:100%; max-height:850px; object-fit:contain;" /></body></html>';
-                            $imgPdf = Pdf::loadHTML($html)->setPaper('A4', 'portrait');
-                            $imgPdf->save($tempImagePdfPath);
-                            $merger->addFile($tempImagePdfPath);
-                        }
-                    }
-                }
+           // 3. Add uploaded Documents
+if ($applicant->documents) {
+    $seenHashes = [];
+
+    foreach ($applicant->documents as $doc) {
+        // Skip rows whose content we've already merged in this run
+        $key = $doc->file_hash ?? $doc->original_filename; // fallback if hash not backfilled yet
+        if (isset($seenHashes[$key])) {
+            continue;
+        }
+        $seenHashes[$key] = true;
+
+        $fullDocPath = storage_path('app/public/' . $doc->file_path);
+        if (file_exists($fullDocPath)) {
+            $mime = strtolower($doc->mime_type);
+            if ($mime === 'application/pdf') {
+                $compatDocPath = $this->ensureCompatiblePdf($fullDocPath, $tempFiles);
+                $merger->addFile($compatDocPath);
+            } elseif (in_array($mime, ['image/jpeg', 'image/jpg', 'image/png'])) {
+                $tempImagePdfPath = storage_path('app/temp/img_doc_' . uniqid() . '.pdf');
+                $tempFiles[] = $tempImagePdfPath;
+                $imageData = base64_encode(file_get_contents($fullDocPath));
+                $src = 'data:' . $mime . ';base64,' . $imageData;
+
+                $html = '<html><body style="margin:0;padding:20px;text-align:center;"><h3 style="font-family:sans-serif;color:#333;">Document: ' . htmlspecialchars($doc->original_filename) . '</h3><img src="' . $src . '" style="max-width:100%; max-height:850px; object-fit:contain;" /></body></html>';
+                $imgPdf = Pdf::loadHTML($html)->setPaper('A4', 'portrait');
+                $imgPdf->save($tempImagePdfPath);
+                $merger->addFile($tempImagePdfPath);
             }
+        }
+    }
+}
 
             // Merge all into one PDF
             $mergedContent = $merger->merge();

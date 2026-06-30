@@ -600,13 +600,13 @@ class ApplicationController extends Controller
   
         $request->validate([
             'applicant_id' => 'required|exists:applicants,id',
-            'documents.driving_license' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'documents.pay_check.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'documents.bank_statement.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'documents.social_security_card' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'documents.other_source_of_income.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'documents.driving_license' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'documents.pay_check.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'documents.bank_statement.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'documents.social_security_card' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'documents.other_source_of_income.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'documents.other_source_of_income.description' => 'nullable|string',
-            'documents.other.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'documents.other.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'documents.other.description' => 'nullable|string'
         ]);
 
@@ -681,13 +681,26 @@ class ApplicationController extends Controller
                     }
                 }
 
-                foreach ($files as $file) {
-
+                foreach ($files as $index => $file) {
                     if ($file instanceof \Illuminate\Http\UploadedFile && $file->isValid()) {
 
                         $originalName = $file->getClientOriginalName();
+                        $extension    = $file->getClientOriginalExtension();
+                        $fileHash     = hash_file('sha256', $file->getRealPath());
 
-                        $extension = $file->getClientOriginalExtension();
+                        // If a file with the same name OR same content hash already exists for this
+                        // applicant + document_type, just skip it — no error, it's already stored.
+                        $alreadyExists = ApplicantDocument::where('applicant_id', $request->applicant_id)
+                            ->where('document_type', $documentType)
+                            ->where(function ($q) use ($originalName, $fileHash) {
+                                $q->where('original_filename', $originalName)
+                                  ->orWhere('file_hash', $fileHash);
+                            })
+                            ->exists();
+
+                        if ($alreadyExists) {
+                            continue;
+                        }
 
                         $fileName = time() . '_' . Str::random(10) . '_' .
                             (Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) ?: 'file')
@@ -700,24 +713,50 @@ class ApplicationController extends Controller
                         );
 
                         ApplicantDocument::create([
-                            'applicant_id' => $request->applicant_id,
-                            'session_id' => $sessionId,
-                            'document_type' => $documentType,
-                            'file_path' => $filePath,
+                            'applicant_id'      => $request->applicant_id,
+                            'session_id'        => $sessionId,
+                            'document_type'     => $documentType,
+                            'file_path'         => $filePath,
                             'original_filename' => $originalName,
-                            'mime_type' => $file->getMimeType(),
-                            'size' => $file->getSize(),
-                            'description' => $description
+                            'mime_type'         => $file->getMimeType(),
+                            'size'              => $file->getSize(),
+                            'file_hash'         => $fileHash,
+                            'description'       => $description
                         ]);
                     }
                 }
+
             }
 
             Applicant::where('id', $request->applicant_id)->update(['current_step' => 11]);
 
             return response()->json(['success' => true, 'current_step' => 11]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error('Step 10 save error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Delete a single uploaded document (called from Step 10 UI)
+     */
+    public function deleteDocument($documentId)
+    {
+        try {
+            $document = ApplicantDocument::findOrFail($documentId);
+
+            // Delete the physical file
+            if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+                Storage::disk('public')->delete($document->file_path);
+            }
+
+            $document->delete();
+
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            Log::error('Delete document error: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -754,25 +793,25 @@ class ApplicationController extends Controller
             if ($applicant) {
                 $fullData = $applicant->loadFullFormData();
 
-                // Add document file URLs
-                $documents = ApplicantDocument::where('applicant_id', $applicant->id)->get();
-                $fullData['documents_list'] = $documents->map(function ($doc) {
-                    return [
-                        'id' => $doc->id,
-                        'document_type' => $doc->document_type,
-                        'original_filename' => $doc->original_filename,
-
-                        'file_url' => asset(Storage::url($doc->file_path)),
-                        'description' => $doc->description
-                    ];
-                });
+                // Build documents list at top level (not inside form_data)
+                $documentsList = ApplicantDocument::where('applicant_id', $applicant->id)->get()
+                    ->map(function ($doc) {
+                        return [
+                            'id'                => $doc->id,
+                            'document_type'     => $doc->document_type,
+                            'original_filename' => $doc->original_filename,
+                            'file_url'          => asset(Storage::url($doc->file_path)),
+                            'description'       => $doc->description
+                        ];
+                    })->values();
 
                 return response()->json([
-                    'success' => true,
-                    'applicant_id' => $applicant->id,
-                    'session_id' => $applicant->session_id,
-                    'current_step' => $applicant->current_step ?? 1,
-                    'form_data' => $fullData
+                    'success'        => true,
+                    'applicant_id'   => $applicant->id,
+                    'session_id'     => $applicant->session_id,
+                    'current_step'   => $applicant->current_step ?? 1,
+                    'form_data'      => $fullData,
+                    'documents_list' => $documentsList
                 ]);
             }
 
@@ -805,23 +844,24 @@ class ApplicationController extends Controller
             if ($applicant) {
                 $fullData = $applicant->loadFullFormData();
 
-                // Add document file URLs
-                $fullData['documents_list'] = $applicant->documents->map(function ($doc) {
+                // Build documents list at top level (not inside form_data)
+                $documentsList = $applicant->documents->map(function ($doc) {
                     return [
-                        'id' => $doc->id,
-                        'document_type' => $doc->document_type,
+                        'id'                => $doc->id,
+                        'document_type'     => $doc->document_type,
                         'original_filename' => $doc->original_filename,
-                        'file_url' => asset(Storage::url($doc->file_path)),
-                        'description' => $doc->description
+                        'file_url'          => asset(Storage::url($doc->file_path)),
+                        'description'       => $doc->description
                     ];
-                });
+                })->values();
 
                 return response()->json([
-                    'success' => true,
-                    'applicant_id' => $applicant->id,
-                    'session_id' => $applicant->session_id,
-                    'current_step' => $applicant->current_step ?? 1,
-                    'form_data' => $fullData
+                    'success'        => true,
+                    'applicant_id'   => $applicant->id,
+                    'session_id'     => $applicant->session_id,
+                    'current_step'   => $applicant->current_step ?? 1,
+                    'form_data'      => $fullData,
+                    'documents_list' => $documentsList
                 ]);
             }
 
@@ -991,20 +1031,44 @@ class ApplicationController extends Controller
     public function viewPdf(\App\Models\Applicant $applicant)
     {
         // Only allow if authorized (owner or admin)
-        if (Auth::id() !== $applicant->user_id && Auth::user()->role !== 'admin' && Auth::user()->role !== 'superadmin') {
+        $user = Auth::user();
+        if (!$user || (Auth::id() !== $applicant->user_id && $user->role !== 'admin' && $user->role !== 'superadmin')) {
             abort(403);
         }
 
+        // Save original memory limit for restoration
+        $originalMemoryLimit = @ini_get('memory_limit');
+        
+        // Increase memory temporarily for safe PDF generation
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+        
         $pdfService = new PDFService();
-        $result = $pdfService->generateMergedPDF($applicant);
-
-        if (!$result || !isset($result['path'])) {
+        $result = null;
+        
+        // Generate the merged PDF (application + consent + documents)
+        try {
+            $result = $pdfService->generateMergedPDF($applicant);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('viewPdf failed for applicant ' . $applicant->id . ': ' . $e->getMessage());
+            @ini_set('memory_limit', $originalMemoryLimit);
+            abort(500, 'Failed to generate PDF');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('viewPdf threw for applicant ' . $applicant->id . ': ' . $e->getMessage());
+            @ini_set('memory_limit', $originalMemoryLimit);
             abort(500, 'Failed to generate PDF');
         }
+        
+        if (!$result || !isset($result['path'])) {
+            @ini_set('memory_limit', $originalMemoryLimit);
+            abort(500, 'Failed to generate PDF - no result');
+        }
+
+        @ini_set('memory_limit', $originalMemoryLimit);
 
         return response()->file($result['path'], [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="merged_application_' . $applicant->id . '.pdf"'
+            'Content-Disposition' => 'inline; filename="application_' . $applicant->id . '.pdf"'
         ])->deleteFileAfterSend(true);
     }
 }

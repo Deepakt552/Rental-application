@@ -100,6 +100,7 @@ Route::prefix('api/application')->group(function () {
     Route::post('/step8/save', [App\Http\Controllers\ApplicationController::class, 'saveStep8']);
     Route::post('/step9/save', [App\Http\Controllers\ApplicationController::class, 'saveStep9']);
     Route::post('/step10/save', [App\Http\Controllers\ApplicationController::class, 'saveStep10']);
+    Route::delete('/document/{documentId}', [App\Http\Controllers\ApplicationController::class, 'deleteDocument']);
     Route::post('/final-submit', [App\Http\Controllers\ApplicationController::class, 'finalSubmit']);
 
     Route::get('/ping', function () {

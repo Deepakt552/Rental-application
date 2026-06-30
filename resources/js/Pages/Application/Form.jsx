@@ -18,6 +18,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     const [resumeEmail, setResumeEmail] = useState('');
     const [resumeLoading, setResumeLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [uploadedDocuments, setUploadedDocuments] = useState([]);
     const [isEmailChecking, setIsEmailChecking] = useState(false);
     const [emailAvailable, setEmailAvailable] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -393,6 +394,17 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         setIsSaving(false);
                         return false;
                     }
+                    // After a successful save, refresh uploaded documents list
+                    if (result.success && applicantId) {
+                        safeFetch(`/api/application/applicant/${idToUse}`)
+                            .then(r => r ? r.json() : null)
+                            .then(r => {
+                                if (r && r.success && r.documents_list) {
+                                    setUploadedDocuments(r.documents_list);
+                                }
+                            })
+                            .catch(() => {});
+                    }
                     setIsSaving(false);
                     return result.success;
                 } catch (error) {
@@ -755,6 +767,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 localStorage.setItem('applicant_id', result.applicant_id);
                 setCurrentStep(result.current_step);
 
+                // Load already-uploaded documents
+                if (result.documents_list && result.documents_list.length > 0) {
+                    setUploadedDocuments(result.documents_list);
+                }
+
                 const fd = result.form_data;
 
                 // Restore all data
@@ -788,8 +805,6 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             setResumeLoading(false);
         }
     };
-    console.log(formData.documents.pay_check);
-    console.log(formData.documents.bank_statement);
     // Final submit
     const finalSubmit = async () => {
 
@@ -808,6 +823,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         ];
 
         const missingDocs = requiredDocs.filter((id) => {
+
+            // Check already-uploaded docs from server first
+            const alreadyHas = uploadedDocuments.some(d => d.document_type === id);
+            if (alreadyHas) return false;
 
             // Multiple file validation
             if (id === 'pay_check' || id === 'bank_statement') {
@@ -970,6 +989,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         setSessionId(result.session_id);
                         setCurrentStep(result.current_step);
                         localStorage.setItem('applicant_id', result.applicant_id);
+
+                        // Load already-uploaded documents so Step 10 can display them
+                        if (result.documents_list && result.documents_list.length > 0) {
+                            setUploadedDocuments(result.documents_list);
+                        }
 
                         const fd = result.form_data;
                         if (fd.personal_info) setFormData(prev => ({ ...prev, personal_info: fd.personal_info }));
@@ -2357,8 +2381,26 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             }
         ];
 
+        // Collect all document-related errors
+        const docErrors = Object.keys(errors)
+            .filter(key => key.startsWith('documents'))
+            .map(key => errors[key]);
+
         return (
             <div className="space-y-8">
+                {docErrors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex items-start gap-3 text-red-700">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-sm mb-1">Please fix the following errors:</h4>
+                            <ul className="list-disc list-inside text-xs space-y-1">
+                                {docErrors.map((err, i) => (
+                                    <li key={i}>{err}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                )}
                 {/* Info Card */}
                 <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl flex items-start gap-4">
                     <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -2368,7 +2410,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         <h4 className="font-bold text-slate-900 mb-1">Final Step: Document Upload</h4>
                         <p className="text-sm text-slate-600 leading-relaxed">
                             To process your application faster, please provide clear photos or PDF scans of the following documents.
-                            Supported formats: <span className="font-bold">PDF, JPG, PNG</span> (Max 2MB).
+                            Supported formats: <span className="font-bold">PDF, JPG, PNG</span> (Max 5MB).
                         </p>
                     </div>
                 </div>
@@ -2379,9 +2421,12 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         const Icon = doc.icon;
                         const value = formData.documents[doc.id];
 
+                        // Already-uploaded files for this doc type from the server
+                        const alreadyUploaded = uploadedDocuments.filter(d => d.document_type === doc.id);
+
                         const isFileSelected = doc.multiple
-                            ? value && value.length > 0
-                            : value;
+                            ? (value && value.length > 0) || alreadyUploaded.length > 0
+                            : value || alreadyUploaded.length > 0;
                         const hasError = errors[`documents.${doc.id}`] || (errors.step10 && !isFileSelected);
 
                         return (
@@ -2406,81 +2451,75 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     </div>
                                 </div>
 
-                                <div className="sm:w-64 flex-shrink-0">
-                                    {!isFileSelected ? (
-                                        <label className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-50 text-slate-600 text-xs font-bold cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-all border border-slate-200 border-dashed">
-                                            <Upload className="w-3.5 h-3.5" />
-                                            <span>
-                                                {doc.multiple ? 'Upload Documents' : 'Upload Document'}
-                                            </span>
+                                <div className="sm:w-64 flex-shrink-0 space-y-2">
 
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept=".pdf,.jpg,.jpeg,.png"
-                                                multiple={doc.multiple}
-                                                onChange={(e) => {
-                                                    const files = Array.from(e.target.files);
-
-                                                    if (files.length > 0) {
-                                                        const invalidFiles = files.filter(f => f.size > 2 * 1024 * 1024);
-                                                        if (invalidFiles.length > 0) {
-                                                            toast.error('Each file must be less than 2MB');
-                                                            setErrors(prev => ({
-                                                                ...prev,
-                                                                [`documents.${doc.id}`]: 'Each file must be less than 2MB'
-                                                            }));
-                                                            return;
-                                                        }
-
-                                                        setErrors(prev => {
-                                                            const newErrors = { ...prev };
-                                                            delete newErrors[`documents.${doc.id}`];
-                                                            return newErrors;
-                                                        });
-
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            documents: {
-                                                                ...prev.documents,
-                                                                [doc.id]: doc.multiple
-                                                                    ? [...(prev.documents[doc.id] || []), ...files]
-                                                                    : files[0]
+                                    {/* ── Already-uploaded files from the server ─────────────────── */}
+                                    {alreadyUploaded.length > 0 && alreadyUploaded.map(uploaded => (
+                                        <div key={uploaded.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-50 border border-green-200 shadow-sm">
+                                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-bold text-green-800 truncate">{uploaded.original_filename}</p>
+                                                <p className="text-[10px] text-green-600 font-medium">Uploaded ✓</p>
+                                            </div>
+                                            <a
+                                                href={uploaded.file_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="p-1 rounded text-green-600 hover:text-green-800"
+                                                title="View file"
+                                            >
+                                                <Eye className="w-3.5 h-3.5" />
+                                            </a>
+                                            <button
+                                                type="button"
+                                                title="Remove file"
+                                                onClick={async () => {
+                                                    if (!confirm(`Remove "${uploaded.original_filename}"?`)) return;
+                                                    try {
+                                                        const res = await safeFetch(`/api/application/document/${uploaded.id}`, {
+                                                            method: 'DELETE',
+                                                            headers: {
+                                                                'Accept': 'application/json',
+                                                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                                                             }
-                                                        }));
+                                                        });
+                                                        if (res && res.ok) {
+                                                            setUploadedDocuments(prev => prev.filter(d => d.id !== uploaded.id));
+                                                            toast.success('File removed.');
+                                                        } else {
+                                                            toast.error('Failed to remove file.');
+                                                        }
+                                                    } catch {
+                                                        toast.error('Failed to remove file.');
                                                     }
                                                 }}
-                                            />
-                                        </label>
-                                    ) : doc.multiple ? (
-                                        <div className="space-y-2">
-                                            {formData.documents[doc.id].map((file, fileIndex) => (
-                                                <div
-                                                    key={fileIndex}
-                                                    className="flex items-center gap-2 p-2 rounded-lg bg-white border border-green-100 shadow-sm"
-                                                >
+                                                className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    {/* ── Newly selected files (not yet saved) ──────────────────── */}
+                                    {doc.multiple && value && value.length > 0 && value.map((file, fileIndex) => {
+                                        const fileError = errors[`documents.${doc.id}.${fileIndex}`];
+                                        return (
+                                            <div
+                                                key={fileIndex}
+                                                className={`flex flex-col gap-1 p-2 rounded-lg bg-white border shadow-sm ${fileError ? 'border-red-500 bg-red-50' : 'border-blue-100'}`}
+                                            >
+                                                <div className="flex items-center gap-2">
                                                     <div className="w-8 h-8 bg-slate-50 rounded flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
                                                         {file.type?.startsWith('image/') ? (
-                                                            <img
-                                                                src={URL.createObjectURL(file)}
-                                                                alt="preview"
-                                                                className="w-full h-full object-cover"
-                                                            />
+                                                            <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
                                                         ) : (
                                                             <FileText className="w-4 h-4 text-slate-400" />
                                                         )}
                                                     </div>
-
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-xs font-bold text-slate-900 truncate">
-                                                            {file.name}
-                                                        </p>
-
-                                                        <p className="text-[10px] font-medium text-slate-400">
-                                                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                                                        </p>
+                                                        <p className="text-xs font-bold text-slate-900 truncate">{file.name}</p>
+                                                        <p className="text-[10px] font-medium text-blue-500">Ready to upload</p>
                                                     </div>
-
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -2488,85 +2527,95 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                                                 ...prev,
                                                                 documents: {
                                                                     ...prev.documents,
-                                                                    [doc.id]: prev.documents[doc.id].filter(
-                                                                        (_, i) => i !== fileIndex
-                                                                    )
+                                                                    [doc.id]: prev.documents[doc.id].filter((_, i) => i !== fileIndex)
                                                                 }
                                                             }));
+                                                            setErrors(prev => {
+                                                                const e = { ...prev };
+                                                                delete e[`documents.${doc.id}.${fileIndex}`];
+                                                                return e;
+                                                            });
                                                         }}
                                                         className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
                                                     >
                                                         <X className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
-                                            ))}
-                                            <label className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-50 text-slate-600 text-xs font-bold cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-all border border-slate-200 border-dashed">
+                                                {fileError && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">{fileError}</p>}
+                                            </div>
+                                        );
+                                    })}
 
-                                                <Upload className="w-3.5 h-3.5" />
-
-                                                <span>Add More Documents</span>
-
-                                                <input
-                                                    type="file"
-                                                    className="hidden"
-                                                    accept=".pdf,.jpg,.jpeg,.png"
-                                                    multiple
-
-                                                    onChange={(e) => {
-
-                                                        const files = Array.from(e.target.files);
-
-                                                        if (files.length > 0) {
-
-                                                            setFormData(prev => ({
-
-                                                                ...prev,
-
-                                                                documents: {
-
-                                                                    ...prev.documents,
-
-                                                                    [doc.id]: [
-                                                                        ...(prev.documents[doc.id] || []),
-                                                                        ...files
-                                                                    ]
-                                                                }
-                                                            }));
-                                                        }
+                                    {!doc.multiple && value && (
+                                        <div className={`flex flex-col gap-1 p-2 rounded-lg bg-white border shadow-sm ${errors[`documents.${doc.id}`] ? 'border-red-500 bg-red-50' : 'border-blue-100'}`}>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 bg-slate-50 rounded flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
+                                                    {value.type?.startsWith('image/') ? (
+                                                        <img src={URL.createObjectURL(value)} alt="preview" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <FileText className="w-4 h-4 text-slate-400" />
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold text-slate-900 truncate">{value.name}</p>
+                                                    <p className="text-[10px] font-medium text-blue-500">Ready to upload</p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({ ...prev, documents: { ...prev.documents, [doc.id]: null } }));
+                                                        setErrors(prev => { const e = { ...prev }; delete e[`documents.${doc.id}`]; return e; });
                                                     }}
-                                                />
-                                            </label>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-2 p-2 rounded-lg bg-white border border-green-100 shadow-sm">
-                                            <div className="w-8 h-8 bg-slate-50 rounded flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
-                                                {formData.documents[doc.id].type?.startsWith('image/') ? (
-                                                    <img src={URL.createObjectURL(formData.documents[doc.id])} alt="preview" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <FileText className="w-4 h-4 text-slate-400" />
-                                                )}
+                                                    className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-bold text-slate-900 truncate">{formData.documents[doc.id].name}</p>
-                                                <p className="text-[10px] font-medium text-slate-400">{(formData.documents[doc.id].size / 1024 / 1024).toFixed(2)} MB</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setFormData(prev => ({
-                                                    ...prev,
-                                                    documents: { ...prev.documents, [doc.id]: null }
-                                                }))}
-                                                className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
+                                            {errors[`documents.${doc.id}`] && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">{errors[`documents.${doc.id}`]}</p>}
                                         </div>
                                     )}
+
+                                    {/* ── Upload button (always shown so user can add/replace) ──── */}
+                                    <label className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-50 text-slate-600 text-xs font-bold cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-all border border-slate-200 border-dashed">
+                                        <Upload className="w-3.5 h-3.5" />
+                                        <span>
+                                            {alreadyUploaded.length > 0 || isFileSelected
+                                                ? (doc.multiple ? 'Add More' : 'Replace File')
+                                                : (doc.multiple ? 'Upload Documents' : 'Upload Document')}
+                                        </span>
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            multiple={doc.multiple}
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files);
+                                                if (files.length > 0) {
+                                                    const invalidFiles = files.filter(f => f.size > 5 * 1024 * 1024);
+                                                    if (invalidFiles.length > 0) {
+                                                        toast.error('Each file must be less than 5MB');
+                                                        return;
+                                                    }
+                                                    setErrors(prev => { const e = { ...prev }; delete e[`documents.${doc.id}`]; return e; });
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        documents: {
+                                                            ...prev.documents,
+                                                            [doc.id]: doc.multiple
+                                                                ? [...(prev.documents[doc.id] || []), ...files]
+                                                                : files[0]
+                                                        }
+                                                    }));
+                                                }
+                                            }}
+                                        />
+                                    </label>
                                 </div>
                             </div>
                         );
                     })}
                 </div>
+
 
                 {/* Optional Documents */}
                 <div className="space-y-4 pt-4">
@@ -2606,11 +2655,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
                                         const file = e.target.files[0];
                                         if (file) {
-                                            if (file.size > 2 * 1024 * 1024) {
-                                                toast.error('File must be less than 2MB');
+                                            if (file.size > 5 * 1024 * 1024) {
+                                                toast.error('File must be less than 5MB');
                                                 setErrors(prev => ({
                                                     ...prev,
-                                                    'documents.other_source_of_income': 'File must be less than 2MB'
+                                                    'documents.other_source_of_income': 'File must be less than 5MB'
                                                 }));
                                                 return;
                                             }
@@ -2630,28 +2679,44 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     }} />
                                 </label>
                             ) : (
-                                <div className="flex items-center gap-4 p-4 rounded-xl bg-white border border-slate-100 shadow-sm">
-                                    <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
-                                        {formData.documents.other_source_of_income.file.type?.startsWith('image/') ? (
-                                            <img src={URL.createObjectURL(formData.documents.other_source_of_income.file)} alt="preview" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <FileText className="w-6 h-6 text-slate-400" />
-                                        )}
+                                <div className={`flex flex-col gap-1 p-4 rounded-xl bg-white border shadow-sm ${
+                                    errors['documents.other_source_of_income.file'] ? 'border-red-500 bg-red-50' : 'border-slate-100'
+                                }`}>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
+                                            {formData.documents.other_source_of_income.file.type?.startsWith('image/') ? (
+                                                <img src={URL.createObjectURL(formData.documents.other_source_of_income.file)} alt="preview" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <FileText className="w-6 h-6 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-slate-900 truncate">{formData.documents.other_source_of_income.file.name}</p>
+                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{(formData.documents.other_source_of_income.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    documents: { ...prev.documents, other_source_of_income: { ...prev.documents.other_source_of_income, file: null } }
+                                                }));
+                                                setErrors(prev => {
+                                                    const newErrors = { ...prev };
+                                                    delete newErrors['documents.other_source_of_income.file'];
+                                                    return newErrors;
+                                                });
+                                            }}
+                                            className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-slate-900 truncate">{formData.documents.other_source_of_income.file.name}</p>
-                                        <p className="text-[10px] font-medium text-slate-400 mt-0.5">{(formData.documents.other_source_of_income.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({
-                                            ...prev,
-                                            documents: { ...prev.documents, other_source_of_income: { ...prev.documents.other_source_of_income, file: null } }
-                                        }))}
-                                        className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
+                                    {errors['documents.other_source_of_income.file'] && (
+                                        <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">
+                                            {errors['documents.other_source_of_income.file']}
+                                        </p>
+                                    )}
                                 </div>
                             )}
                             {errors['documents.other_source_of_income'] && <p className="text-red-500 text-[10px] mt-1 font-bold uppercase tracking-tight">{errors['documents.other_source_of_income']}</p>}
@@ -2689,11 +2754,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
                                         const file = e.target.files[0];
                                         if (file) {
-                                            if (file.size > 2 * 1024 * 1024) {
-                                                toast.error('File must be less than 2MB');
+                                            if (file.size > 5 * 1024 * 1024) {
+                                                toast.error('File must be less than 5MB');
                                                 setErrors(prev => ({
                                                     ...prev,
-                                                    'documents.other': 'File must be less than 2MB'
+                                                    'documents.other': 'File must be less than 5MB'
                                                 }));
                                                 return;
                                             }
@@ -2710,28 +2775,44 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     }} />
                                 </label>
                             ) : (
-                                <div className="flex items-center gap-4 p-4 rounded-xl bg-white border border-slate-100 shadow-sm">
-                                    <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
-                                        {formData.documents.other.file.type?.startsWith('image/') ? (
-                                            <img src={URL.createObjectURL(formData.documents.other.file)} alt="preview" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <FileText className="w-6 h-6 text-slate-400" />
-                                        )}
+                                <div className={`flex flex-col gap-1 p-4 rounded-xl bg-white border shadow-sm ${
+                                    errors['documents.other.file'] ? 'border-red-500 bg-red-50' : 'border-slate-100'
+                                }`}>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
+                                            {formData.documents.other.file.type?.startsWith('image/') ? (
+                                                <img src={URL.createObjectURL(formData.documents.other.file)} alt="preview" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <FileText className="w-6 h-6 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-slate-900 truncate">{formData.documents.other.file.name}</p>
+                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{(formData.documents.other.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    documents: { ...prev.documents, other: { ...prev.documents.other, file: null } }
+                                                }));
+                                                setErrors(prev => {
+                                                    const newErrors = { ...prev };
+                                                    delete newErrors['documents.other.file'];
+                                                    return newErrors;
+                                                });
+                                            }}
+                                            className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-slate-900 truncate">{formData.documents.other.file.name}</p>
-                                        <p className="text-[10px] font-medium text-slate-400 mt-0.5">{(formData.documents.other.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({
-                                            ...prev,
-                                            documents: { ...prev.documents, other: { ...prev.documents.other, file: null } }
-                                        }))}
-                                        className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
+                                    {errors['documents.other.file'] && (
+                                        <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">
+                                            {errors['documents.other.file']}
+                                        </p>
+                                    )}
                                 </div>
                             )}
                             {errors['documents.other'] && <p className="text-red-500 text-[10px] mt-1 font-bold uppercase tracking-tight">{errors['documents.other']}</p>}

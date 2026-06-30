@@ -781,10 +781,15 @@ class CustomTcpdiParser {
                 if ($char == '[') {
                     // get array content
                     $objval = array();
+                    $max_len = strlen($data);
                     do {
+                        $prev_offset = $offset;
                         // get element
                         list($element, $offset) = $this->getRawObject($offset, $data);
                         $objval[] = $element;
+                        if ($offset <= $prev_offset || $offset >= $max_len) {
+                            break;
+                        }
                     } while ($element[0] !== ']');
                     // remove closing delimiter
                     array_pop($objval);
@@ -894,7 +899,12 @@ class CustomTcpdiParser {
         $i=1;
         $dict = '';
         $offset += 2;
+        $max_len = strlen($data);
         do {
+            $prev_offset = $offset;
+            if ($offset >= $max_len) {
+                break;
+            }
             if ($data[$offset] == '>' && $data[$offset+1] == '>') {
                 $i--;
                 $dict .= '>>';
@@ -907,20 +917,28 @@ class CustomTcpdiParser {
                 $dict .= $data[$offset];
                 $offset++;
             }
+            if ($offset <= $prev_offset) {
+                break;
+            }
         } while ($i>0);
 
         // Now that we have just the dict, parse it.
         $dictoffset = 0;
+        $dict_len = strlen($dict);
         do {
+            $prev_dictoffset = $dictoffset;
             // Get dict element.
             list($key, $eloffset) = $this->getRawObject($dictoffset, $dict);
-            if ($key[0] == '>>') {
+            if ($key[0] == '>>' || empty($key[0]) || $eloffset >= $dict_len) {
                 break;
             }
             list($element, $dictoffset) = $this->getRawObject($eloffset, $dict);
             $objval['/'.$key[1]] = $element;
             unset($key);
             unset($element);
+            if ($dictoffset <= $prev_dictoffset || $dictoffset >= $dict_len) {
+                break;
+            }
         } while (true);
 
         return array($objval, $offset);
@@ -952,7 +970,9 @@ class CustomTcpdiParser {
         // get array of object content
         $objdata = array();
         $i = 0; // object main index
+        $max_len = strlen($this->pdfdata);
         do {
+            $prev_offset = $offset;
             if (($i > 0) AND (isset($objdata[($i - 1)][0])) AND ($objdata[($i - 1)][0] == PDF_TYPE_DICTIONARY) AND is_array($objdata[($i - 1)][1]) AND array_key_exists('/Length', $objdata[($i - 1)][1])) {
                 // Stream - get using /Length in stream's dict
                 $lengthobj = $objdata[($i-1)][1]['/Length'];
@@ -974,6 +994,9 @@ class CustomTcpdiParser {
             }
             $objdata[$i] = $element;
             ++$i;
+            if ($offset <= $prev_offset || $offset >= $max_len || empty($element[0])) {
+                break;
+            }
         } while ($element[0] != 'endobj');
         // remove closing delimiter
         array_pop($objdata);
