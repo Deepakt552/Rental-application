@@ -87,6 +87,10 @@ class ApplicationController extends Controller
                 ->first();
         }
 
+        if ($applicant && $applicant->payment_status === 'paid' && !(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin()))) {
+            return redirect()->route('dashboard')->with('error', 'You cannot modify your application after payment has been completed.');
+        }
+
         return Inertia::render('Application/Form', [
             'type' => 'admin',
             'sessionId' => $sessionId,
@@ -112,6 +116,10 @@ class ApplicationController extends Controller
                 ->where('status', 'draft')
                 ->latest()
                 ->first();
+        }
+
+        if ($applicant && $applicant->payment_status === 'paid' && !(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin()))) {
+            return redirect()->route('dashboard')->with('error', 'You cannot modify your application after payment has been completed.');
         }
 
         return Inertia::render('Application/Form', [

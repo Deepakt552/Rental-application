@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import {
@@ -10,10 +10,23 @@ import {
     User, MapPin, Briefcase, Calendar,
     ExternalLink, Activity
 } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
-export default function Dashboard({ auth, applicant, notifications, paymentSettings }) {
+export default function Dashboard({ auth, applicant, notifications, paymentSettings, flash }) {
     const [activeTab, setActiveTab] = useState('overview');
     const { post, processing } = useForm();
+
+    useEffect(() => {
+        if (flash?.success) {
+            toast.success(flash.success);
+        }
+        if (flash?.error) {
+            toast.error(flash.error);
+        }
+        if (flash?.message) {
+            toast.success(flash.message);
+        }
+    }, [flash]);
 
     const handlePayment = () => {
         post(route('payment.checkout', { applicant: applicant.id }));
@@ -30,6 +43,7 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
             user={auth.user}
         >
             <Head title="Dashboard" />
+            <Toaster position="top-right" />
 
             <div className="py-8 bg-slate-50/50 dark:bg-slate-800/50 min-h-[calc(100vh-64px)]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -97,7 +111,7 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                         <div className="lg:col-span-2 space-y-8">
 
                             {/* Urgent Actions Section */}
-                            {applicant && (!isComplete || !applicant.is_consent_completed || !isPaid) && (
+                            {applicant && !isPaid && (
                                 <div className={`p-8 rounded-2xl border-2 flex flex-col md:flex-row items-center justify-between gap-8 ${!isComplete ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-900/30' :
                                     (!applicant.is_consent_completed ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-900/30' : 'bg-brand/5 border-brand/10')
                                     }`}>

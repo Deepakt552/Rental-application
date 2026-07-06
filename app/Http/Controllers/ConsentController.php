@@ -166,6 +166,14 @@ class ConsentController extends Controller
                 session(['consent_session_id' => $sessionId]);
             }
 
+            $applicant = null;
+            if (Auth::check()) {
+                $applicant = \App\Models\Applicant::where('user_id', Auth::id())->latest()->first();
+            }
+            if ($applicant && $applicant->payment_status === 'paid' && !(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin()))) {
+                return redirect()->route('dashboard')->with('error', 'Consent form cannot be modified after payment is completed.');
+            }
+
             return Inertia::render('Consent/ExcelForm', [
                 'sessionId' => $sessionId,
 

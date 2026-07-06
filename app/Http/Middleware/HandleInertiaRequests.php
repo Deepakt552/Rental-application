@@ -35,10 +35,11 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'flash' => [
-            'success' => fn () => session('success'),
-            'message' => fn () => session('message'),
-            'consent_session_id' => fn () => session('consent_session_id'),
-        ],
+                'success' => fn () => session('success'),
+                'message' => fn () => session('message'),
+                'error' => fn () => session('error'),
+                'consent_session_id' => fn () => session('consent_session_id'),
+            ],
         ];
     }
 }
