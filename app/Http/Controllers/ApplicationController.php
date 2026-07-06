@@ -67,9 +67,6 @@ class ApplicationController extends Controller
 
     public function index(Request $request)
     {
-        $sessionId = (string) Str::uuid();
-        session(['consent_session_id' => $sessionId]);
-
         $applicantId = $request->query('applicant_id');
         $applicant = null;
         if ($applicantId) {
@@ -90,6 +87,17 @@ class ApplicationController extends Controller
         if ($applicant && $applicant->payment_status === 'paid' && !(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin()))) {
             return redirect()->route('dashboard')->with('error', 'You cannot modify your application after payment has been completed.');
         }
+
+        // Determine session ID
+        if ($applicant) {
+            $sessionId = $applicant->session_id;
+            $consentSessionId = $applicant->consentRecord?->session_id ?? $applicant->session_id;
+        } else {
+            $sessionId = (string) Str::uuid();
+            $consentSessionId = $sessionId;
+        }
+
+        session(['consent_session_id' => $consentSessionId]);
 
         return Inertia::render('Application/Form', [
             'type' => 'admin',
@@ -122,8 +130,20 @@ class ApplicationController extends Controller
             return redirect()->route('dashboard')->with('error', 'You cannot modify your application after payment has been completed.');
         }
 
+        // Determine session ID
+        if ($applicant) {
+            $sessionId = $applicant->session_id;
+            $consentSessionId = $applicant->consentRecord?->session_id ?? $applicant->session_id;
+        } else {
+            $sessionId = (string) Str::uuid();
+            $consentSessionId = $sessionId;
+        }
+
+        session(['consent_session_id' => $consentSessionId]);
+
         return Inertia::render('Application/Form', [
             'type' => 'superadmin',
+            'sessionId' => $sessionId,
             'initialApplicantId' => $applicant ? $applicant->id : null,
             'initialStep' => $applicant ? ($applicant->current_step > 10 ? 1 : $applicant->current_step) : null,
         ]);

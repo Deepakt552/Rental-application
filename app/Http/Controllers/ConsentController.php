@@ -79,12 +79,13 @@ class ConsentController extends Controller
                 }
             }
 
-            // Get session ID from query parameter or session
-            $sessionId = $request->get('session_id') ?? session('consent_session_id');
-
-            // If no session ID exists but we have an applicant with a record, use that
-            if (!$sessionId && $applicant && $applicant->consentRecord) {
+            // If the applicant has an existing consent record, we must use that session ID
+            // to load their previous details and avoid creating a blank / duplicate record.
+            if ($applicant && $applicant->consentRecord) {
                 $sessionId = $applicant->consentRecord->session_id;
+            } else {
+                // Get session ID from query parameter or session
+                $sessionId = $request->get('session_id') ?? session('consent_session_id');
             }
 
             if ($sessionId) {
@@ -148,31 +149,28 @@ class ConsentController extends Controller
     {
 
         try {
-            // Get session ID from query parameter or session
-
-
-            // If no session ID exists, create a new one
-
-            $sessionId = (string) Str::uuid();
-            session(['consent_session_id' => $sessionId]);
-
-
-            // Get existing consent data for this session
-            $sessionId = $request->query('session_id') ?? session('consent_session_id');
-
-            // If no session ID exists, create a new one
-            if (!$sessionId) {
-                $sessionId = (string) Str::uuid();
-                session(['consent_session_id' => $sessionId]);
-            }
-
             $applicant = null;
             if (Auth::check()) {
-                $applicant = \App\Models\Applicant::where('user_id', Auth::id())->latest()->first();
+                $applicant = \App\Models\Applicant::where('user_id', Auth::id())->with('consentRecord')->latest()->first();
             }
             if ($applicant && $applicant->payment_status === 'paid' && !(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin()))) {
                 return redirect()->route('dashboard')->with('error', 'Consent form cannot be modified after payment is completed.');
             }
+
+            // Get session ID from query parameter or session
+            $sessionId = $request->query('session_id') ?? session('consent_session_id');
+
+            // If the applicant has an existing consent record, we must use that session ID
+            if ($applicant && $applicant->consentRecord) {
+                $sessionId = $applicant->consentRecord->session_id;
+            }
+
+            // If no session ID exists, create a new one
+            if (!$sessionId) {
+                $sessionId = (string) Str::uuid();
+            }
+
+            session(['consent_session_id' => $sessionId]);
 
             return Inertia::render('Consent/ExcelForm', [
                 'sessionId' => $sessionId,
