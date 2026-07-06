@@ -236,50 +236,86 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                                             </div>
                                                             <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs">Documents & Forms</h4>
                                                         </div>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            <a
-                                                                href={route('application.pdf', applicant.id)}
-                                                                target="_blank"
-                                                                className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:border-brand hover:shadow-lg transition-all group"
-                                                            >
-                                                                <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                                                    <FileText className="w-5 h-5" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Application</p>
-                                                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">View PDF</p>
-                                                                </div>
-                                                            </a>
+                                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                             <div className="flex flex-col gap-2 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-all">
+                                                                 <div className="flex items-center gap-4 group">
+                                                                     <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center">
+                                                                         <FileText className="w-5 h-5" />
+                                                                     </div>
+                                                                     <div className="flex-1">
+                                                                         <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Application Summary</p>
+                                                                         <a href={route('application.pdf', applicant.id)} target="_blank" rel="noreferrer" className="text-[10px] text-brand hover:underline font-bold uppercase flex items-center gap-1 mt-0.5">
+                                                                             View PDF <ExternalLink className="w-3.5 h-3.5" />
+                                                                         </a>
+                                                                     </div>
+                                                                 </div>
+                                                                 {!isPaid && (
+                                                                     <Link
+                                                                         href={`/rental-application?applicant_id=${applicant.id}`}
+                                                                         className="w-full mt-2 py-1.5 bg-[#0e4a81]/10 hover:bg-[#0e4a81] hover:text-white text-[#0e4a81] text-center text-[11px] font-bold rounded-lg transition-all active:scale-95"
+                                                                     >
+                                                                         Edit Application
+                                                                     </Link>
+                                                                 )}
+                                                             </div>
 
-                                                            {applicant.is_consent_completed && (
-                                                                <a
-                                                                    href={route('application.consent.pdf', applicant.id)}
-                                                                    target="_blank"
-                                                                    className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:border-brand hover:shadow-lg transition-all group"
-                                                                >
-                                                                    <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-colors">
-                                                                        <ShieldCheck className="w-5 h-5" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Consent Form</p>
-                                                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">View Signed</p>
-                                                                    </div>
-                                                                </a>
-                                                            )}
+                                                             {applicant.is_consent_completed ? (
+                                                                 <div className="flex flex-col gap-2 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-all">
+                                                                     <div className="flex items-center gap-4 group">
+                                                                         <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 flex items-center justify-center">
+                                                                             <ShieldCheck className="w-5 h-5" />
+                                                                         </div>
+                                                                         <div className="flex-1">
+                                                                             <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Consent Form</p>
+                                                                             <a href={route('application.consent.pdf', applicant.id)} target="_blank" rel="noreferrer" className="text-[10px] text-brand hover:underline font-bold uppercase flex items-center gap-1 mt-0.5">
+                                                                                 View Signed <ExternalLink className="w-3.5 h-3.5" />
+                                                                             </a>
+                                                                         </div>
+                                                                     </div>
+                                                                     {!isPaid && (
+                                                                         <Link
+                                                                             href="/consent"
+                                                                             className="w-full mt-2 py-1.5 bg-[#0e4a81]/10 hover:bg-[#0e4a81] hover:text-white text-[#0e4a81] text-center text-[11px] font-bold rounded-lg transition-all active:scale-95"
+                                                                         >
+                                                                             Edit Consent Form
+                                                                         </Link>
+                                                                     )}
+                                                                 </div>
+                                                             ) : (
+                                                                 !isPaid && (
+                                                                     <div className="flex flex-col gap-2 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-all">
+                                                                         <div className="flex items-center gap-4 group">
+                                                                             <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 flex items-center justify-center">
+                                                                                 <ShieldCheck className="w-5 h-5" />
+                                                                             </div>
+                                                                             <div className="flex-1">
+                                                                                 <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Consent Form</p>
+                                                                                 <p className="text-[10px] text-amber-600 font-bold uppercase">Pending Signature</p>
+                                                                             </div>
+                                                                         </div>
+                                                                         <Link
+                                                                             href="/consent"
+                                                                             className="w-full mt-2 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-center text-[11px] font-bold rounded-lg transition-all active:scale-95"
+                                                                         >
+                                                                             Sign Consent Form
+                                                                         </Link>
+                                                                     </div>
+                                                                 )
+                                                             )}
 
-                                                            <button
-                                                                onClick={() => setActiveTab('documents')}
-                                                                className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-dashed border-slate-200 dark:border-slate-600 hover:bg-white dark:bg-slate-800 hover:border-brand hover:shadow-lg transition-all group text-left"
-                                                            >
-                                                                <div className="w-10 h-10 rounded-lg bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-500 flex items-center justify-center group-hover:text-brand transition-colors">
-                                                                    <PlusCircle className="w-5 h-5" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">View All Files</p>
-                                                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">{applicant.documents?.length || 0} Uploads</p>
-                                                                </div>
-                                                            </button>
-                                                        </div>
+                                                             <button
+                                                                 onClick={() => setActiveTab('documents')}
+                                                                 className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-dashed border-slate-200 dark:border-slate-600 hover:bg-white dark:bg-slate-800 hover:border-brand hover:shadow-lg transition-all group text-left"
+                                                             >
+                                                                 <div className="w-10 h-10 rounded-lg bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-500 flex items-center justify-center group-hover:text-brand transition-colors">
+                                                                     <PlusCircle className="w-5 h-5" />
+                                                                 </div>
+                                                                 <div>
+                                                                     <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">View All Files</p>
+                                                                     <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">{applicant.documents?.length || 0} Uploads</p>
+                                                                 </div>
+                                                             </button>
+                                                         </div>
                                                     </div>
                                                 </div>
                                             ) : (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useForm, usePage } from '@inertiajs/react';
+import { useForm, usePage, Link } from '@inertiajs/react';
 import toast, { Toaster } from 'react-hot-toast';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import {
     User, MapPin, Briefcase, CarFront, Dog,
     IdCardLanyard, AlertCircle, ChevronDown, ChevronUp,
@@ -987,7 +988,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     if (result && result.success) {
                         setApplicantId(result.applicant_id);
                         setSessionId(result.session_id);
-                        setCurrentStep(result.current_step);
+                        setCurrentStep(result.current_step > 10 ? 1 : result.current_step);
                         localStorage.setItem('applicant_id', result.applicant_id);
 
                         // Load already-uploaded documents so Step 10 can display them
@@ -2823,7 +2824,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         );
     };
 
-    return (
+    const pageContent = (
         <div className="min-h-screen bg-gray-50 py-8">
             <Toaster position="top-right" />
             <div className="max-w-6xl mx-auto px-4">
@@ -2953,14 +2954,19 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
                 {/* Header */}
                 <div className="bg-white rounded-t-lg shadow-sm p-6 border-b">
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">Rental Application Form</h1>
                             <p className="text-gray-500 text-sm mt-1">Complete all sections to submit your application</p>
                         </div>
-                        {/* <button onClick={() => setShowEmailPopup(true)} className="text-sm text-brand hover:underline flex items-center gap-1">
-                            <span>↻</span> Resume from email
-                        </button> */}
+                        {auth?.user && (auth.user.role === 'admin' || auth.user.role === 'superadmin') && applicantId && (
+                            <Link
+                                href={`/admin/applications/${applicantId}`}
+                                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm"
+                            >
+                                ← Back to Applicant Details
+                            </Link>
+                        )}
                     </div>
                 </div>
 
@@ -3101,4 +3107,14 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             </div>
         </div>
     );
+
+    if (auth && auth.user) {
+        return (
+            <AuthenticatedLayout user={auth.user}>
+                {pageContent}
+            </AuthenticatedLayout>
+        );
+    }
+
+    return pageContent;
 }

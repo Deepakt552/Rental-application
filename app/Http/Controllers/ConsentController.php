@@ -26,6 +26,43 @@ class ConsentController extends Controller
         $this->pdfService = $pdfService;
     }
 
+    private function checkConsentAccessAndPayment($sessionId, $checkPayment = true)
+    {
+        $applicant = null;
+        $record = ConsentRecord::where('session_id', $sessionId)->first();
+        if ($record && $record->applicant_id) {
+            $applicant = \App\Models\Applicant::find($record->applicant_id);
+        }
+        if (!$applicant) {
+            $applicant = \App\Models\Applicant::where('session_id', $sessionId)->first();
+        }
+
+        if (!$applicant) {
+            return ['allowed' => true];
+        }
+
+        $user = Auth::user();
+        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin());
+
+        // Authorization check
+        if ($user) {
+            if (!$isAdmin && $applicant->user_id !== $user->id) {
+                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            }
+        } else {
+            if ($applicant->user_id !== null) {
+                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            }
+        }
+
+        // Payment check
+        if ($checkPayment && $applicant->payment_status === 'paid' && !$isAdmin) {
+            return ['allowed' => false, 'error_code' => 403, 'message' => 'You cannot modify your consent form after payment has been completed.'];
+        }
+
+        return ['allowed' => true, 'applicant' => $applicant];
+    }
+
     /**
      * Display the consent form
      */
@@ -50,6 +87,17 @@ class ConsentController extends Controller
                 $sessionId = $applicant->consentRecord->session_id;
             }
 
+            if ($sessionId) {
+                $access = $this->checkConsentAccessAndPayment($sessionId, false);
+                if (!$access['allowed']) {
+                    return redirect()->route('dashboard')->with('error', $access['message']);
+                }
+                $resolvedApplicant = $access['applicant'] ?? null;
+                if ($resolvedApplicant && $resolvedApplicant->payment_status === 'paid' && !(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin()))) {
+                    return redirect()->route('dashboard')->with('error', 'Consent form cannot be modified after payment is completed.');
+                }
+            }
+
             // If still no session ID, create a new one
             if (!$sessionId) {
                 $sessionId = (string) Str::uuid();
@@ -72,8 +120,20 @@ class ConsentController extends Controller
             // Get existing consent data for this session
             $consentData = $this->consentService->getConsentData($sessionId);
 
+            $resolvedApplicant = null;
+            if (isset($access) && isset($access['applicant'])) {
+                $resolvedApplicant = $access['applicant'];
+            }
+            if (!$resolvedApplicant) {
+                $record = ConsentRecord::where('session_id', $sessionId)->first();
+                if ($record && $record->applicant_id) {
+                    $resolvedApplicant = \App\Models\Applicant::find($record->applicant_id);
+                }
+            }
+
             return Inertia::render('Consent/Form', [
                 'sessionId' => $sessionId,
+                'applicantId' => $resolvedApplicant ? $resolvedApplicant->id : null,
                 'step1Data' => $consentData['step1'],
                 'step2Data' => $consentData['step2'],
                 'step3Data' => $consentData['step3'],
@@ -128,6 +188,11 @@ class ConsentController extends Controller
             $validated = $request->validated();
             $sessionId = $validated['session_id'];
 
+            $access = $this->checkConsentAccessAndPayment($sessionId, true);
+            if (!$access['allowed']) {
+                return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+            }
+
             // Save step 1 data
             $this->consentService->saveStep1($sessionId, $validated);
 
@@ -153,10 +218,16 @@ class ConsentController extends Controller
 
 
 
+
         $type = 'superadmin';
         try {
             $validated = $request->validated();
             $sessionId = $validated['session_id'];
+
+            $access = $this->checkConsentAccessAndPayment($sessionId, true);
+            if (!$access['allowed']) {
+                return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+            }
 
             // Save step 1 data
 
@@ -204,6 +275,11 @@ class ConsentController extends Controller
             $validated = $request->validated();
             $sessionId = $validated['session_id'];
 
+            $access = $this->checkConsentAccessAndPayment($sessionId, true);
+            if (!$access['allowed']) {
+                return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+            }
+
             // Save step 2 data
             $this->consentService->saveStep2($sessionId, $validated);
 
@@ -234,6 +310,11 @@ class ConsentController extends Controller
         try {
             $validated = $request->validated();
             $sessionId = $validated['session_id'];
+
+            $access = $this->checkConsentAccessAndPayment($sessionId, true);
+            if (!$access['allowed']) {
+                return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+            }
 
             DB::beginTransaction();
             // Generate PDF immediately after step 3
@@ -397,6 +478,16 @@ class ConsentController extends Controller
         // dd($request->all());
         try {
             $sessionId = $request->input('session_id') ?? session('consent_session_id');
+
+            if ($sessionId) {
+                $access = $this->checkConsentAccessAndPayment($sessionId, true);
+                if (!$access['allowed']) {
+                    if ($request->wantsJson()) {
+                        return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+                    }
+                    return redirect()->route('dashboard')->with('error', $access['message']);
+                }
+            }
 
             if (!$sessionId) {
                 if ($request->wantsJson()) {

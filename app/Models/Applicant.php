@@ -10,6 +10,64 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Applicant extends Model
 {
+    protected static function booted()
+    {
+        static::deleting(function ($applicant) {
+            // Delete physical files
+            foreach ($applicant->documents as $document) {
+                if ($document->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($document->file_path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($document->file_path);
+                }
+                $document->delete();
+            }
+
+            if ($applicant->session_id) {
+                \Illuminate\Support\Facades\Storage::disk('public')->deleteDirectory('documents/' . $applicant->session_id);
+                
+                $tempPath = storage_path("app/public/consents/temp_consent_{$applicant->session_id}.pdf");
+                if (file_exists($tempPath)) {
+                    @unlink($tempPath);
+                }
+            }
+
+            // Delete consent record PDFs
+            $consentRecords = \App\Models\ConsentRecord::where('applicant_id', $applicant->id)
+                ->orWhere('session_id', $applicant->session_id)
+                ->get();
+            
+            foreach ($consentRecords as $rec) {
+                if ($rec->consent_pdf_path) {
+                    $pdfPath = storage_path("app/public/" . $rec->consent_pdf_path);
+                    if (file_exists($pdfPath)) {
+                        @unlink($pdfPath);
+                    }
+                }
+                $rec->delete();
+            }
+
+            // Delete child models by session/applicant
+            if ($applicant->session_id) {
+                \App\Models\ApplicantTenantConsent::where('session_id', $applicant->session_id)->delete();
+                \App\Models\CoApplicantConsent::where('session_id', $applicant->session_id)->delete();
+                \App\Models\CriminalBackgroundCheck::where('session_id', $applicant->session_id)->delete();
+                \App\Models\AffordableHousingConsent::where('session_id', $applicant->session_id)->delete();
+            }
+
+            $applicant->personalInformation()?->delete();
+            $applicant->currentAddress()?->delete();
+            $applicant->previousAddress()?->delete();
+            $applicant->employment()?->delete();
+            $applicant->previousEmployment()?->delete();
+            $applicant->screening()?->delete();
+            $applicant->pets()->delete();
+            $applicant->vehicles()->delete();
+            $applicant->emergencyContact()?->delete();
+            $applicant->householdMembers()->delete();
+            $applicant->payments()->delete();
+            $applicant->emailLogs()->delete();
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

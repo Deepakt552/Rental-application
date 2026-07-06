@@ -1,14 +1,16 @@
 // resources/js/Pages/Consent/Form.jsx
 import React, { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage, Link } from '@inertiajs/react';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Stepper from '@/Components/Consent/Stepper';
 import Step1 from '@/Components/Consent/Steps/Step1';
 import Step2 from '@/Components/Consent/Steps/Step2';
 import Step3 from '@/Components/Consent/Steps/Step3';
 
-export default function ConsentForm({ sessionId, step1Data, step2Data, step3Data, applicantType }) {
+export default function ConsentForm({ sessionId, applicantId, step1Data, step2Data, step3Data, applicantType }) {
+    const { auth } = usePage().props;
     const [currentStep, setCurrentStep] = useState(0);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -392,17 +394,27 @@ export default function ConsentForm({ sessionId, step1Data, step2Data, step3Data
         }
     };
 
-    return (
+    const pageContent = (
         <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-12">
             <Toaster position="top-right" />
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl overflow-hidden border border-gray-100 dark:border-slate-700">
                     <div className="px-6 py-8">
-                        <div className="text-center mb-8">
-                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Consent Forms</h1>
-                            <p className="text-gray-600 dark:text-slate-400 mt-2">
-                                Please complete the consent form to proceed with your application
-                            </p>
+                        <div className="flex justify-between items-center mb-8 border-b pb-4">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Consent Forms</h1>
+                                <p className="text-gray-600 dark:text-slate-400 mt-2">
+                                    Please complete the consent form to proceed with your application
+                                </p>
+                            </div>
+                            {auth?.user && (auth.user.role === 'admin' || auth.user.role === 'superadmin') && applicantId && (
+                                <Link
+                                    href={`/admin/applications/${applicantId}`}
+                                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm bg-white"
+                                >
+                                    ← Back to Applicant Details
+                                </Link>
+                            )}
                         </div>
 
                         <Stepper steps={steps.map(s => s.title)} currentStep={currentStep} />
@@ -454,4 +466,14 @@ export default function ConsentForm({ sessionId, step1Data, step2Data, step3Data
             </div>
         </div>
     );
+
+    if (auth && auth.user) {
+        return (
+            <AuthenticatedLayout user={auth.user}>
+                {pageContent}
+            </AuthenticatedLayout>
+        );
+    }
+
+    return pageContent;
 }

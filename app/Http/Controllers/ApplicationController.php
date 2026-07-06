@@ -36,6 +36,35 @@ class ApplicationController extends Controller
         $this->emailService = $emailService;
     }
 
+    private function checkApplicantAccessAndPayment($applicantId, $checkPayment = true)
+    {
+        $applicant = Applicant::find($applicantId);
+        if (!$applicant) {
+            return ['allowed' => false, 'error_code' => 404, 'message' => 'Applicant not found'];
+        }
+
+        $user = Auth::user();
+        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin());
+
+        // Authorization check
+        if ($user) {
+            if (!$isAdmin && $applicant->user_id !== $user->id) {
+                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            }
+        } else {
+            if ($applicant->user_id !== null) {
+                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            }
+        }
+
+        // Payment check
+        if ($checkPayment && $applicant->payment_status === 'paid' && !$isAdmin) {
+            return ['allowed' => false, 'error_code' => 403, 'message' => 'You cannot modify your application after payment has been completed.'];
+        }
+
+        return ['allowed' => true, 'applicant' => $applicant];
+    }
+
     public function index(Request $request)
     {
         $sessionId = (string) Str::uuid();
@@ -44,7 +73,11 @@ class ApplicationController extends Controller
         $applicantId = $request->query('applicant_id');
         $applicant = null;
         if ($applicantId) {
-            $applicant = Applicant::find($applicantId);
+            $access = $this->checkApplicantAccessAndPayment($applicantId, false);
+            if (!$access['allowed']) {
+                abort($access['error_code'], $access['message']);
+            }
+            $applicant = $access['applicant'];
         }
 
         if (!$applicant && Auth::check()) {
@@ -58,7 +91,7 @@ class ApplicationController extends Controller
             'type' => 'admin',
             'sessionId' => $sessionId,
             'initialApplicantId' => $applicant ? $applicant->id : null,
-            'initialStep' => $applicant ? $applicant->current_step : null,
+            'initialStep' => $applicant ? ($applicant->current_step > 10 ? 1 : $applicant->current_step) : null,
         ]);
     }
 
@@ -67,7 +100,11 @@ class ApplicationController extends Controller
         $applicantId = $request->query('applicant_id');
         $applicant = null;
         if ($applicantId) {
-            $applicant = Applicant::find($applicantId);
+            $access = $this->checkApplicantAccessAndPayment($applicantId, false);
+            if (!$access['allowed']) {
+                abort($access['error_code'], $access['message']);
+            }
+            $applicant = $access['applicant'];
         }
 
         if (!$applicant && Auth::check()) {
@@ -80,7 +117,7 @@ class ApplicationController extends Controller
         return Inertia::render('Application/Form', [
             'type' => 'superadmin',
             'initialApplicantId' => $applicant ? $applicant->id : null,
-            'initialStep' => $applicant ? $applicant->current_step : null,
+            'initialStep' => $applicant ? ($applicant->current_step > 10 ? 1 : $applicant->current_step) : null,
         ]);
     }
 
@@ -117,6 +154,13 @@ class ApplicationController extends Controller
             ->first();
 
         if ($draft) {
+            $user = Auth::user();
+            if ($draft->user_id !== null && (!$user || $draft->user_id !== $user->id) && !($user && ($user->isAdmin() || $user->isSuperAdmin()))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'An application with this email already exists.'
+                ], 422);
+            }
             session(['current_applicant_id' => $draft->id]);
             return response()->json([
                 'success' => true,
@@ -197,11 +241,18 @@ class ApplicationController extends Controller
             'password.required' => 'A password is required to save your progress and allow you to resume later.'
         ]);
 
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+        $applicant = $access['applicant'];
+
         try {
             DB::beginTransaction();
 
             // Create or Update User if not logged in
-            $userId = Auth::id();
+            $currentUser = Auth::user();
+            $userId = $currentUser ? $currentUser->id : null;
             if (!$userId) {
                 // Check if user already exists with this email
                 $existingUser = User::where('email', $request->email)->first();
@@ -230,11 +281,16 @@ class ApplicationController extends Controller
             }
 
             // Update applicant with user_id
-            Applicant::where('id', $request->applicant_id)->update([
+            $updateData = [
                 'email' => $request->email,
-                'user_id' => $userId,
                 'current_step' => 2
-            ]);
+            ];
+            $currentAuthUser = Auth::user();
+            $isAdminUser = $currentAuthUser && ($currentAuthUser->isAdmin() || $currentAuthUser->isSuperAdmin());
+            if (!$applicant->user_id && !$isAdminUser) {
+                $updateData['user_id'] = $userId;
+            }
+            $applicant->update($updateData);
 
             PersonalInformation::updateOrCreate(
                 ['applicant_id' => $request->applicant_id],
@@ -305,6 +361,11 @@ class ApplicationController extends Controller
             'notice_given' => 'nullable'
         ]);
 
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+
         try {
             CurrentAddress::updateOrCreate(
                 ['applicant_id' => $request->applicant_id],
@@ -354,6 +415,11 @@ class ApplicationController extends Controller
             'previous_reason' => 'nullable|string'
         ]);
 
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+
         try {
             $data = $request->except(['applicant_id']);
 
@@ -399,6 +465,11 @@ class ApplicationController extends Controller
             'employer_phone' => 'nullable|string'
         ]);
 
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+
         try {
             Employment::updateOrCreate(
                 ['applicant_id' => $request->applicant_id],
@@ -435,6 +506,11 @@ class ApplicationController extends Controller
             'previous_employer_zip' => 'nullable|string',
             'previous_employer_phone' => 'nullable|string'
         ]);
+
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
 
         try {
             $data = $request->except(['applicant_id']);
@@ -476,6 +552,11 @@ class ApplicationController extends Controller
             'legal_case_details' => 'nullable|string'
         ]);
 
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+
         try {
             Screening::updateOrCreate(
                 ['applicant_id' => $request->applicant_id],
@@ -499,6 +580,11 @@ class ApplicationController extends Controller
             'applicant_id' => 'required|exists:applicants,id',
             'pets' => 'nullable|array|max:2'
         ]);
+
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
 
         try {
             Pet::where('applicant_id', $request->applicant_id)->delete();
@@ -536,6 +622,11 @@ class ApplicationController extends Controller
             'applicant_id' => 'required|exists:applicants,id',
             'vehicles' => 'nullable|array|max:4'
         ]);
+
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
 
         try {
             Vehicle::where('applicant_id', $request->applicant_id)->delete();
@@ -578,6 +669,11 @@ class ApplicationController extends Controller
             'zip_code' => 'nullable|string'
         ]);
 
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+
         try {
             EmergencyContact::updateOrCreate(
                 ['applicant_id' => $request->applicant_id],
@@ -609,6 +705,11 @@ class ApplicationController extends Controller
             'documents.other.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'documents.other.description' => 'nullable|string'
         ]);
+
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
 
         try {
             $applicant = Applicant::find($request->applicant_id);
@@ -665,8 +766,12 @@ class ApplicationController extends Controller
                     }
                 }
 
-                // Single document old delete
-                if (empty($config['multiple'])) {
+                // Single document old delete - only if a new file is actually uploaded
+                $newFile = $config['has_description']
+                    ? $request->file("documents.{$documentType}.file")
+                    : $request->file("documents.{$documentType}");
+
+                if (empty($config['multiple']) && $newFile instanceof \Illuminate\Http\UploadedFile && $newFile->isValid()) {
 
                     $oldDocuments = ApplicantDocument::where('applicant_id', $request->applicant_id)
                         ->where('document_type', $documentType)
@@ -747,6 +852,11 @@ class ApplicationController extends Controller
         try {
             $document = ApplicantDocument::findOrFail($documentId);
 
+            $access = $this->checkApplicantAccessAndPayment($document->applicant_id, true);
+            if (!$access['allowed']) {
+                return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+            }
+
             // Delete the physical file
             if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
                 Storage::disk('public')->delete($document->file_path);
@@ -770,6 +880,11 @@ class ApplicationController extends Controller
             'applicant_id' => 'required|exists:applicants,id',
             'current_step' => 'required|integer|min:1|max:10'
         ]);
+
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
 
         Applicant::where('id', $request->applicant_id)->update([
             'current_step' => $request->current_step
@@ -827,21 +942,28 @@ class ApplicationController extends Controller
     public function getApplicantById($id)
     {
         try {
-            $applicant = Applicant::with([
-                'personalInformation',
-                'currentAddress',
-                'previousAddress',
-                'employment',
-                'previousEmployment',
-                'screening',
-                'pets',
-                'vehicles',
-                'emergencyContact',
-                'householdMembers',
-                'documents'
-            ])->find($id);
+            $access = $this->checkApplicantAccessAndPayment($id, false);
+            if (!$access['allowed']) {
+                return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+            }
+            $applicant = $access['applicant'];
 
             if ($applicant) {
+                // Eager load details manually
+                $applicant->load([
+                    'personalInformation',
+                    'currentAddress',
+                    'previousAddress',
+                    'employment',
+                    'previousEmployment',
+                    'screening',
+                    'pets',
+                    'vehicles',
+                    'emergencyContact',
+                    'householdMembers',
+                    'documents'
+                ]);
+
                 $fullData = $applicant->loadFullFormData();
 
                 // Build documents list at top level (not inside form_data)
@@ -880,8 +1002,13 @@ class ApplicationController extends Controller
             'applicant_id' => 'required|exists:applicants,id'
         ]);
 
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, true);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+        $applicant = $access['applicant'];
+
         try {
-            $applicant = Applicant::find($request->applicant_id);
 
             // ✅ Validate entire application before submitting
             $validationErrors = $applicant->validateFullApplication();

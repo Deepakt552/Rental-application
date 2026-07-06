@@ -368,4 +368,79 @@ class ApplicationController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+
+    public function uploadDocument(Request $request, $id)
+    {
+        $request->validate([
+            'document_type' => 'required|string|in:driving_license,pay_check,bank_statement,social_security_card,other_source_of_income,other',
+            'file' => 'required|file|max:5120|mimes:pdf,jpg,jpeg,png',
+            'description' => 'nullable|string'
+        ]);
+
+        try {
+            $applicant = Applicant::findOrFail($id);
+            $file = $request->file('file');
+            $originalName = $file->getClientOriginalName();
+            $extension = $file->getClientOriginalExtension();
+            $sessionId = $applicant->session_id ?? (string) \Illuminate\Support\Str::uuid();
+
+            // Calculate file hash to prevent duplicates
+            $fileHash = md5_file($file->getRealPath());
+
+            // Check if this file already exists for this applicant
+            $alreadyExists = \App\Models\ApplicantDocument::where('applicant_id', $applicant->id)
+                ->where('file_hash', $fileHash)
+                ->exists();
+
+            if ($alreadyExists) {
+                return redirect()->back()->with('error', 'This document has already been uploaded.');
+            }
+
+            $fileName = time() . '_' . \Illuminate\Support\Str::random(10) . '_' .
+                (\Illuminate\Support\Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) ?: 'file')
+                . '.' . strtolower($extension);
+
+            $filePath = $file->storeAs(
+                'documents/' . $sessionId,
+                $fileName,
+                'public'
+            );
+
+            \App\Models\ApplicantDocument::create([
+                'applicant_id'      => $applicant->id,
+                'session_id'        => $sessionId,
+                'document_type'     => $request->document_type,
+                'file_path'         => $filePath,
+                'original_filename' => $originalName,
+                'mime_type'         => $file->getMimeType(),
+                'size'              => $file->getSize(),
+                'file_hash'         => $fileHash,
+                'description'       => $request->description
+            ]);
+
+            return redirect()->back()->with('success', 'Document uploaded successfully.');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Admin document upload error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to upload document: ' . $e->getMessage());
+        }
+    }
+
+    public function deleteDocument($id, $documentId)
+    {
+        try {
+            $document = \App\Models\ApplicantDocument::where('applicant_id', $id)->findOrFail($documentId);
+
+            // Delete physical file
+            if ($document->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($document->file_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($document->file_path);
+            }
+
+            $document->delete();
+
+            return redirect()->back()->with('success', 'Document deleted successfully.');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Admin delete document error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to delete document: ' . $e->getMessage());
+        }
+    }
 }

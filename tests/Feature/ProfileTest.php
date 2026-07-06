@@ -96,4 +96,59 @@ class ProfileTest extends TestCase
 
         $this->assertNotNull($user->fresh());
     }
+
+    public function test_deleting_user_account_cleans_up_all_associated_application_records(): void
+    {
+        $user = User::factory()->create();
+        
+        $applicant = \App\Models\Applicant::create([
+            'email' => $user->email,
+            'user_id' => $user->id,
+            'session_id' => 'test-session-123',
+            'status' => 'draft',
+            'current_step' => 1
+        ]);
+
+        $personalInfo = \App\Models\PersonalInformation::create([
+            'applicant_id' => $applicant->id,
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'phone' => '1234567890',
+            'email' => $user->email,
+            'date_of_birth' => '1990-01-01'
+        ]);
+
+        $document = \App\Models\ApplicantDocument::create([
+            'applicant_id' => $applicant->id,
+            'session_id' => 'test-session-123',
+            'document_type' => 'driving_license',
+            'file_path' => 'documents/test-session-123/license.png',
+            'original_filename' => 'license.png',
+            'mime_type' => 'image/png',
+            'size' => 100
+        ]);
+
+        // Fake the disk and write the file
+        \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::disk('public')->put('documents/test-session-123/license.png', 'fake-image-content');
+
+        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('public')->exists('documents/test-session-123/license.png'));
+
+        $response = $this
+            ->actingAs($user)
+            ->delete('/profile', [
+                'password' => 'password',
+            ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertNull($user->fresh());
+        
+        // Assert applicant and related models are deleted
+        $this->assertNull($applicant->fresh());
+        $this->assertNull($personalInfo->fresh());
+        $this->assertNull($document->fresh());
+
+        // Assert file is deleted from disk
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('public')->exists('documents/test-session-123/license.png'));
+    }
 }

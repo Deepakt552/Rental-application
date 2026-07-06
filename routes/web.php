@@ -209,6 +209,8 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
     Route::post('/applications/{id}/resend', [AdminApplicationController::class, 'resend'])->name('admin.applications.resend');
     Route::post('/applications/{id}/comment', [AdminApplicationController::class, 'updateComment'])->name('admin.applications.comment');
     Route::delete('/applications/{id}', [AdminApplicationController::class, 'destroy'])->name('admin.applications.destroy');
+    Route::post('/applications/{id}/upload-document', [AdminApplicationController::class, 'uploadDocument'])->name('admin.applications.upload-document');
+    Route::delete('/applications/{id}/document/{documentId}', [AdminApplicationController::class, 'deleteDocument'])->name('admin.applications.delete-document');
     Route::get('/payments', [\App\Http\Controllers\Admin\PaymentController::class, 'index'])->name('admin.payments.index');
     Route::get('/payments/export', [\App\Http\Controllers\Admin\PaymentController::class, 'export'])->name('admin.payments.export');
 

@@ -56,4 +56,18 @@ class User extends Authenticatable
     {
         return $this->role === 'superadmin';
     }
+
+    public function applicants()
+    {
+        return $this->hasMany(Applicant::class);
+    }
+
+    protected static function booted()
+    {
+        static::deleting(function ($user) {
+            $user->applicants()->get()->each(function ($applicant) {
+                $applicant->delete();
+            });
+        });
+    }
 }

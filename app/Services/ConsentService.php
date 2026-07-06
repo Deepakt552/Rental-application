@@ -31,11 +31,9 @@ class ConsentService
     private function getStep1Data(string $sessionId): array
     {
         $applicantTenant = ApplicantTenantConsent::where('session_id', $sessionId)
-            ->whereNull('application_id')
             ->first();
 
         $coApplicants = CoApplicantConsent::where('session_id', $sessionId)
-            ->whereNull('application_id')
             ->get();
 
         return [
@@ -58,7 +56,6 @@ class ConsentService
     private function getStep2Data(string $sessionId): array
     {
         $applicants = CriminalBackgroundCheck::where('session_id', $sessionId)
-            ->whereNull('application_id')
             ->get();
 
         return [
@@ -78,7 +75,6 @@ class ConsentService
     private function getStep3Data(string $sessionId): array
     {
         $consents = AffordableHousingConsent::where('session_id', $sessionId)
-            ->whereNull('application_id')
             ->get();
 
         $data = [
@@ -111,13 +107,17 @@ class ConsentService
     {
         DB::beginTransaction();
         try {
+            // First check if there is an existing record with this session_id to get its application_id
+            $existing = ApplicantTenantConsent::where('session_id', $sessionId)->first();
+            $applicationId = $existing ? $existing->application_id : null;
+
             // Save or update applicant tenant consent
             ApplicantTenantConsent::updateOrCreate(
                 [
                     'session_id' => $sessionId,
-                    'application_id' => null
                 ],
                 [
+                    'application_id' => $applicationId,
                     'applicant_name' => $data['applicant_tenant']['applicant_name'],
                     'signature' => $data['applicant_tenant']['signature'],
                     'consent_date' => $data['applicant_tenant']['consent_date'],
@@ -126,7 +126,6 @@ class ConsentService
 
             // Delete existing co-applicants for this session
             CoApplicantConsent::where('session_id', $sessionId)
-                ->whereNull('application_id')
                 ->delete();
 
             // Save new co-applicants
@@ -135,6 +134,7 @@ class ConsentService
                     if (!empty($coApplicant['name'])) {
                         CoApplicantConsent::create([
                             'session_id' => $sessionId,
+                            'application_id' => $applicationId,
                             'name' => $coApplicant['name'],
                             'signature' => $coApplicant['signature'],
                             'consent_date' => $coApplicant['consent_date'],
@@ -159,15 +159,18 @@ class ConsentService
     {
         DB::beginTransaction();
         try {
+            $existing = CriminalBackgroundCheck::where('session_id', $sessionId)->first();
+            $applicationId = $existing ? $existing->application_id : null;
+
             // Delete existing criminal background checks
             CriminalBackgroundCheck::where('session_id', $sessionId)
-                ->whereNull('application_id')
                 ->delete();
 
             // Save new checks
             foreach ($data['applicants'] as $applicant) {
                 CriminalBackgroundCheck::create([
                     'session_id' => $sessionId,
+                    'application_id' => $applicationId,
                     'applicant_name' => $applicant['applicant_name'],
                     'social_security_no' => $applicant['social_security_no'],
                     'date_of_birth' => $applicant['date_of_birth'],
@@ -191,14 +194,17 @@ class ConsentService
     {
         DB::beginTransaction();
         try {
+            $existing = AffordableHousingConsent::where('session_id', $sessionId)->first();
+            $applicationId = $existing ? $existing->application_id : null;
+
             // Delete existing affordable housing consents
             AffordableHousingConsent::where('session_id', $sessionId)
-                ->whereNull('application_id')
                 ->delete();
 
             // Save head of household
             AffordableHousingConsent::create([
                 'session_id' => $sessionId,
+                'application_id' => $applicationId,
                 'member_type' => 'head_household',
                 'name' => $data['head_of_household']['name'],
                 'signature' => $data['head_of_household']['signature'],
@@ -209,6 +215,7 @@ class ConsentService
             if (!empty($data['co_head']['name'])) {
                 AffordableHousingConsent::create([
                     'session_id' => $sessionId,
+                    'application_id' => $applicationId,
                     'member_type' => 'co_head',
                     'name' => $data['co_head']['name'],
                     'signature' => $data['co_head']['signature'],
@@ -221,6 +228,7 @@ class ConsentService
                 foreach ($data['adult_members'] as $member) {
                     AffordableHousingConsent::create([
                         'session_id' => $sessionId,
+                        'application_id' => $applicationId,
                         'member_type' => 'adult_member',
                         'name' => $member['name'],
                         'signature' => $member['signature'],
