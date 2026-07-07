@@ -79,7 +79,6 @@ class ApplicationController extends Controller
 
         if (!$applicant && Auth::check()) {
             $applicant = Applicant::where('user_id', Auth::id())
-                ->where('status', 'draft')
                 ->latest()
                 ->first();
         }
@@ -121,7 +120,6 @@ class ApplicationController extends Controller
 
         if (!$applicant && Auth::check()) {
             $applicant = Applicant::where('user_id', Auth::id())
-                ->where('status', 'draft')
                 ->latest()
                 ->first();
         }

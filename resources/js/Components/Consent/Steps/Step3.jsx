@@ -5,17 +5,31 @@ import DynamicRepeater from '../DynamicRepeater';
 import axios from 'axios';
 
 export default function Step3({ data, onChange, sessionId, errors = {} }) {
+    const getFormattedDate = (date) => {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const todayVal = new Date();
+    const todayStr = getFormattedDate(todayVal);
+    
+    const twoDaysAgoVal = new Date();
+    twoDaysAgoVal.setDate(todayVal.getDate() - 2);
+    const minDateStr = getFormattedDate(twoDaysAgoVal);
+
     console.log('Session ID from server:', sessionId);
     const [formData, setFormData] = useState({
         head_of_household: data.head_of_household || {
             name: '',
             signature: '',
-            consent_date: new Date().toISOString().split('T')[0]
+            consent_date: todayStr
         },
         co_head: data.co_head || {
             name: '',
             signature: '',
-            consent_date: new Date().toISOString().split('T')[0]
+            consent_date: todayStr
         },
         adult_members: data.adult_members || []
     });
@@ -75,7 +89,7 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
                 {
                     name: '',
                     signature: '',
-                    consent_date: new Date().toISOString().split('T')[0],
+                    consent_date: todayStr,
                     id: Date.now()
                 }
             ]
@@ -158,6 +172,8 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
                     onChange={(e) => updateAdultMember(index, 'consent_date', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors[`adult_member_${index}_date`] ? 'border-red-500 bg-red-50' : 'border-gray-300'
                         }`}
+                    min={minDateStr}
+                    max={todayStr}
                 />
                 {errors[`adult_member_${index}_date`] && (
                     <p className="mt-1 text-sm text-red-500">{errors[`adult_member_${index}_date`]}</p>
@@ -384,6 +400,8 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
                             value={formData.head_of_household.consent_date}
                             onChange={(e) => updateHeadOfHousehold('consent_date', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            min={minDateStr}
+                            max={todayStr}
                         />
                     </div>
                 </div>
@@ -436,6 +454,8 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
                                     value={formData.co_head.consent_date}
                                     onChange={(e) => updateCoHead('consent_date', e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    min={minDateStr}
+                                    max={todayStr}
                                 />
                             </div>
                         </>

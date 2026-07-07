@@ -4,13 +4,27 @@ import SignaturePad from '../SignaturePad';
 import DynamicRepeater from '../DynamicRepeater';
 
 export default function Step1({ data, onChange, onSave, errors = {}, isExcel = false }) {
+    const getFormattedDate = (date) => {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const todayVal = new Date();
+    const todayStr = getFormattedDate(todayVal);
+    
+    const twoDaysAgoVal = new Date();
+    twoDaysAgoVal.setDate(todayVal.getDate() - 2);
+    const minDateStr = getFormattedDate(twoDaysAgoVal);
+
     const orgName = isExcel ? "Excel Residential Services" : "Triumph Residential Services Inc.";
     const [formData, setFormData] = useState({
         applicant_tenant: data.applicant_tenant || {
             applicant_name: '',
             orgName: orgName,
             signature: '',
-            consent_date: new Date().toISOString().split('T')[0]
+            consent_date: todayStr
             
 
         },
@@ -36,7 +50,7 @@ export default function Step1({ data, onChange, onSave, errors = {}, isExcel = f
                 {
                     name: '',
                     signature: '',
-                    consent_date: new Date().toISOString().split('T')[0],
+                    consent_date: todayStr,
                     id: Date.now()
                 }
             ]
@@ -94,6 +108,8 @@ export default function Step1({ data, onChange, onSave, errors = {}, isExcel = f
                     value={item.consent_date}
                     onChange={(e) => updateCoApplicant(index, 'consent_date', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min={minDateStr}
+                    max={todayStr}
                 />
                 {errors[`co_applicant_${index}_date`] && (
                     <p className="mt-1 text-sm text-red-500">{errors[`co_applicant_${index}_date`]}</p>
@@ -189,6 +205,8 @@ export default function Step1({ data, onChange, onSave, errors = {}, isExcel = f
                             value={formData.applicant_tenant.consent_date}
                             onChange={(e) => updateApplicantTenant('consent_date', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            min={minDateStr}
+                            max={todayStr}
                         />
                     </div>
                 </div>
