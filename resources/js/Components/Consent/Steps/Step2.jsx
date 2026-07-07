@@ -3,6 +3,20 @@ import React, { useState, useEffect } from 'react';
 import SignaturePad from '../SignaturePad';
 
 export default function Step2({ data, onChange, onSave, errors = {}, isExcel = false, step1Data }) {
+    const getFormattedDate = (date) => {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const todayVal = new Date();
+    const todayStr = getFormattedDate(todayVal);
+    
+    const twoDaysAgoVal = new Date();
+    twoDaysAgoVal.setDate(todayVal.getDate() - 2);
+    const minDateStr = getFormattedDate(twoDaysAgoVal);
+
     const orgName = isExcel ? "Excel Residential Services" : "Triumph Residential Services";
     const [formData, setFormData] = useState({
         applicants: data.applicants || []
@@ -27,7 +41,7 @@ export default function Step2({ data, onChange, onSave, errors = {}, isExcel = f
                         applicant_name: name,
                         social_security_no: existing.social_security_no || '',
                         date_of_birth: existing.date_of_birth || '',
-                        today_date: existing.today_date || new Date().toISOString().split('T')[0],
+                        today_date: existing.today_date || todayStr,
                         signature: existing.signature || '',
                         id: existing.id || Date.now() + Math.random()
                     };
@@ -151,6 +165,7 @@ export default function Step2({ data, onChange, onSave, errors = {}, isExcel = f
                     onChange={(e) => updateApplicant(index, 'date_of_birth', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors[`applicant_${index}_dob`] ? 'border-red-500 bg-red-50' : 'border-gray-300'
                         }`}
+                    max={todayStr}
                 />
                 {errors[`applicant_${index}_dob`] && (
                     <p className="mt-1 text-sm text-red-500">{errors[`applicant_${index}_dob`]}</p>
@@ -167,6 +182,8 @@ export default function Step2({ data, onChange, onSave, errors = {}, isExcel = f
                     onChange={(e) => updateApplicant(index, 'today_date', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors[`applicant_${index}_today_date`] ? 'border-red-500 bg-red-50' : 'border-gray-300'
                         }`}
+                    min={minDateStr}
+                    max={todayStr}
                 />
                 {errors[`applicant_${index}_today_date`] && (
                     <p className="mt-1 text-sm text-red-500">{errors[`applicant_${index}_today_date`]}</p>
