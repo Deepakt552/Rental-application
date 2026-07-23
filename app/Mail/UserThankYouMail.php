@@ -22,8 +22,11 @@ class UserThankYouMail extends Mailable
 
     public function envelope(): Envelope
     {
+        $isExcel = (($this->applicant->type ?? '') === 'superadmin' || str_contains(strtolower($this->applicant->company_name ?? ''), 'excel'));
+        $brandName = $isExcel ? 'Excel Residential Services' : 'Triumph Residential Services';
+
         return new Envelope(
-            subject: 'Thank You for Your Rental Application - TriumphRent',
+            subject: 'Thank You for Your Rental Application - ' . $brandName,
         );
     }
 

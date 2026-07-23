@@ -286,35 +286,49 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                                                              </a>
                                                                          </div>
                                                                      </div>
-                                                                     {!isPaid && (
-                                                                         <Link
-                                                                             href="/consent"
-                                                                             className="w-full mt-2 py-1.5 bg-[#0e4a81]/10 hover:bg-[#0e4a81] hover:text-white text-[#0e4a81] text-center text-[11px] font-bold rounded-lg transition-all active:scale-95"
-                                                                         >
-                                                                             Edit Consent Form
-                                                                         </Link>
-                                                                     )}
+                                                                     {!isPaid && isComplete && (
+                                                                        <Link
+                                                                            href="/consent"
+                                                                            className="w-full mt-2 py-1.5 bg-[#0e4a81]/10 hover:bg-[#0e4a81] hover:text-white text-[#0e4a81] text-center text-[11px] font-bold rounded-lg transition-all active:scale-95"
+                                                                        >
+                                                                            Edit Consent Form
+                                                                        </Link>
+                                                                    )}
                                                                  </div>
                                                              ) : (
                                                                  !isPaid && (
-                                                                     <div className="flex flex-col gap-2 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-all">
-                                                                         <div className="flex items-center gap-4 group">
-                                                                             <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 flex items-center justify-center">
-                                                                                 <ShieldCheck className="w-5 h-5" />
-                                                                             </div>
-                                                                             <div className="flex-1">
-                                                                                 <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Consent Form</p>
-                                                                                 <p className="text-[10px] text-amber-600 font-bold uppercase">Pending Signature</p>
-                                                                             </div>
-                                                                         </div>
-                                                                         <Link
-                                                                             href="/consent"
-                                                                             className="w-full mt-2 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-center text-[11px] font-bold rounded-lg transition-all active:scale-95"
-                                                                         >
-                                                                             Sign Consent Form
-                                                                         </Link>
-                                                                     </div>
-                                                                 )
+                                                                     isComplete ? (
+                                                                        <div className="flex flex-col gap-2 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-all">
+                                                                            <div className="flex items-center gap-4 group">
+                                                                                <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 flex items-center justify-center">
+                                                                                    <ShieldCheck className="w-5 h-5" />
+                                                                                </div>
+                                                                                <div className="flex-1">
+                                                                                    <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Consent Form</p>
+                                                                                    <p className="text-[10px] text-amber-600 font-bold uppercase">Pending Signature</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <Link
+                                                                                href="/consent"
+                                                                                className="w-full mt-2 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-center text-[11px] font-bold rounded-lg transition-all active:scale-95"
+                                                                            >
+                                                                                Sign Consent Form
+                                                                            </Link>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="flex flex-col gap-2 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 opacity-60">
+                                                                            <div className="flex items-center gap-4">
+                                                                                <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-400 flex items-center justify-center">
+                                                                                    <ShieldCheck className="w-5 h-5" />
+                                                                                </div>
+                                                                                <div className="flex-1">
+                                                                                    <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Consent Form</p>
+                                                                                    <p className="text-[10px] text-slate-500 font-bold">Locked - Complete Application First</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    )
+                                                                )
                                                              )}
 
                                                              <button

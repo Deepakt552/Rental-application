@@ -19,6 +19,20 @@ class PaymentController extends Controller
             return redirect()->route('dashboard')->with('success', 'Application fee already paid.');
         }
 
+        // 1. Check if application form is completed & submitted
+        if ($applicant->status !== 'submitted' && (int)$applicant->current_step < 11) {
+            return redirect()->route('dashboard')->with('error', 'Please complete and submit all application steps before proceeding to payment.');
+        }
+
+        // 2. Check if consent form is completed
+        $isConsentCompleted = \App\Models\ConsentRecord::where('applicant_id', $applicant->id)
+            ->where('status', 'completed')
+            ->exists();
+
+        if (!$isConsentCompleted) {
+            return redirect()->route('dashboard')->with('error', 'Please complete and sign the legal consent form before proceeding to payment.');
+        }
+
         Stripe::setApiKey(config('services.stripe.secret'));
 
         $adultCount = 0;

@@ -82,11 +82,20 @@ class EmailService
     //         return false;
     //     }
     // }
+    protected function isEmailEnabled(): bool
+    {
+        return \App\Models\Setting::get('enable_email_notifications', '1') === '1';
+    }
+
     public function sendApplicationNotification(
         Applicant $applicant,
         $adminEmail,
         $recipientType = 'admin'
     ) {
+        if (!$this->isEmailEnabled()) {
+            Log::info("Email notifications are globally disabled. Skipping sendApplicationNotification to: {$adminEmail}");
+            return false;
+        }
 
         try {
 
@@ -255,6 +264,11 @@ class EmailService
      */
     public function sendUserThankYouEmail(Applicant $applicant)
     {
+        if (!$this->isEmailEnabled()) {
+            Log::info("Email notifications are globally disabled. Skipping sendUserThankYouEmail.");
+            return false;
+        }
+
         try {
             $userEmail = $applicant->personalInformation->email ?? $applicant->email;
             $userName = $applicant->personalInformation->first_name ?? 'Valued Applicant';
@@ -385,6 +399,9 @@ class EmailService
             $results['admin'] = $this->sendApplicationNotification($applicant, $user->email, $formType);
         }
 
+        // Send thank you to user
+        $results['user'] = $this->sendUserThankYouEmail($applicant);
+
         return $results;
     }
 
@@ -417,6 +434,11 @@ class EmailService
      */
     public function sendConsentReminder(Applicant $applicant, $adminEmail, $formType = 'admin')
     {
+        if (!$this->isEmailEnabled()) {
+            Log::info("Email notifications are globally disabled. Skipping sendConsentReminder to: {$adminEmail}");
+            return false;
+        }
+
         try {
             Mail::send('emails.consent-reminder', [
                 'applicant' => $applicant,

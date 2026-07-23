@@ -17,6 +17,7 @@ class SettingController extends Controller
         $adultApplicationFee = Setting::get('adult_application_fee', 50);
         $enableHoldingDeposit = Setting::get('enable_holding_deposit', '0') === '1';
         $holdingDepositAmount = Setting::get('holding_deposit_amount', 200);
+        $enableEmailNotifications = Setting::get('enable_email_notifications', '1') === '1';
         $enableConsentReminders = Setting::get('enable_consent_reminders', '1') === '1';
         $enablePaymentReminders = Setting::get('enable_payment_reminders', '1') === '1';
 
@@ -27,6 +28,7 @@ class SettingController extends Controller
             'adultApplicationFee' => (float) $adultApplicationFee,
             'enableHoldingDeposit' => $enableHoldingDeposit,
             'holdingDepositAmount' => (float) $holdingDepositAmount,
+            'enableEmailNotifications' => $enableEmailNotifications,
             'enableConsentReminders' => $enableConsentReminders,
             'enablePaymentReminders' => $enablePaymentReminders,
             'properties' => $properties,
@@ -43,6 +45,7 @@ class SettingController extends Controller
             'adult_application_fee' => 'required|numeric|min:0',
             'enable_holding_deposit' => 'required|boolean',
             'holding_deposit_amount' => 'required_if:enable_holding_deposit,true|numeric|min:0',
+            'enable_email_notifications' => 'required|boolean',
             'enable_consent_reminders' => 'required|boolean',
             'enable_payment_reminders' => 'required|boolean',
             'property_settings' => 'nullable|array',
@@ -56,6 +59,7 @@ class SettingController extends Controller
         Setting::set('adult_application_fee', $validated['adult_application_fee']);
         Setting::set('enable_holding_deposit', $validated['enable_holding_deposit'] ? '1' : '0');
         Setting::set('holding_deposit_amount', $validated['holding_deposit_amount'] ?? '0');
+        Setting::set('enable_email_notifications', $validated['enable_email_notifications'] ? '1' : '0');
         Setting::set('enable_consent_reminders', $validated['enable_consent_reminders'] ? '1' : '0');
         Setting::set('enable_payment_reminders', $validated['enable_payment_reminders'] ? '1' : '0');
 

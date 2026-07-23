@@ -110,11 +110,12 @@ function MultiSelectDropdown({ options, selectedValues, onChange, placeholder = 
     );
 }
 
-export default function Settings({ adultApplicationFee, enableHoldingDeposit, holdingDepositAmount, enableConsentReminders, enablePaymentReminders, properties = [], admins = [] }) {
+export default function Settings({ adultApplicationFee, enableHoldingDeposit, holdingDepositAmount, enableEmailNotifications = true, enableConsentReminders, enablePaymentReminders, properties = [], admins = [] }) {
     const { data, setData, post, processing, errors } = useForm({
         adult_application_fee: adultApplicationFee,
         enable_holding_deposit: enableHoldingDeposit,
         holding_deposit_amount: holdingDepositAmount,
+        enable_email_notifications: enableEmailNotifications,
         enable_consent_reminders: enableConsentReminders,
         enable_payment_reminders: enablePaymentReminders,
         property_settings: properties.map(p => ({
@@ -341,6 +342,33 @@ export default function Settings({ adultApplicationFee, enableHoldingDeposit, ho
 
                             {activeTab === 'reminders' && (
                                 <div className="space-y-8 animate-fade-in">
+                                    {/* Global Email Notifications Switch */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start pb-6 border-b border-slate-200 dark:border-slate-700">
+                                        <div className="md:col-span-1">
+                                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Global Email Notifications</h3>
+                                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
+                                                Master switch to enable or disable all outgoing email notifications across the system.
+                                            </p>
+                                        </div>
+                                        <div className="md:col-span-2 space-y-4">
+                                            <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+                                                <input
+                                                    type="checkbox"
+                                                    id="enable_email_notifications"
+                                                    checked={data.enable_email_notifications}
+                                                    onChange={(e) => setData('enable_email_notifications', e.target.checked)}
+                                                    className="h-5 w-5 rounded text-[#0e4a81] dark:text-[#5a9bd5] border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-[#0e4a81] dark:focus:ring-[#5a9bd5] transition-all cursor-pointer"
+                                                />
+                                                <label htmlFor="enable_email_notifications" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                                                    Enable All Outgoing Email Notifications
+                                                </label>
+                                            </div>
+                                            {errors.enable_email_notifications && (
+                                                <p className="mt-2 text-sm text-red-500 dark:text-red-400 font-medium">{errors.enable_email_notifications}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     {/* Email Reminders */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                                         <div className="md:col-span-1">

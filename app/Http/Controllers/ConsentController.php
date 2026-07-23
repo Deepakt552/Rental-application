@@ -60,6 +60,13 @@ class ConsentController extends Controller
             return ['allowed' => false, 'error_code' => 403, 'message' => 'You cannot modify your consent form after payment has been completed.'];
         }
 
+        // Application form completion check
+        if ($applicant && !$isAdmin) {
+            if ($applicant->status !== 'submitted' && (int)$applicant->current_step < 11) {
+                return ['allowed' => false, 'error_code' => 403, 'message' => 'Please complete and submit all steps of your rental application before accessing the consent form.'];
+            }
+        }
+
         return ['allowed' => true, 'applicant' => $applicant];
     }
 
@@ -76,6 +83,10 @@ class ConsentController extends Controller
                 $applicant = \App\Models\Applicant::where('user_id', auth()->id())->with('consentRecord')->latest()->first();
                 if ($applicant) {
                     $applicantType = $applicant->type;
+                    $isAdmin = auth()->user()->isAdmin() || auth()->user()->isSuperAdmin();
+                    if (!$isAdmin && $applicant->status !== 'submitted' && (int)$applicant->current_step < 11) {
+                        return redirect()->route('dashboard')->with('error', 'Please complete and submit all steps of your rental application before accessing the consent form.');
+                    }
                 }
             }
 
@@ -153,8 +164,12 @@ class ConsentController extends Controller
             if (Auth::check()) {
                 $applicant = \App\Models\Applicant::where('user_id', Auth::id())->with('consentRecord')->latest()->first();
             }
-            if ($applicant && $applicant->payment_status === 'paid' && !(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin()))) {
+            $isAdmin = Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin());
+            if ($applicant && $applicant->payment_status === 'paid' && !$isAdmin) {
                 return redirect()->route('dashboard')->with('error', 'Consent form cannot be modified after payment is completed.');
+            }
+            if ($applicant && !$isAdmin && $applicant->status !== 'submitted' && (int)$applicant->current_step < 11) {
+                return redirect()->route('dashboard')->with('error', 'Please complete and submit all steps of your rental application before accessing the consent form.');
             }
 
             // Get session ID from query parameter or session
