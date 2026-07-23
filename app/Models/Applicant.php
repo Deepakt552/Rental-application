@@ -282,19 +282,21 @@ class Applicant extends Model
             ],
 
             // Step 6: Screening
-            'screening' => $this->screening ? $this->screening->toArray() : [
-                'date_of_birth' => '',
-                'screening_country' => '',
-                'has_ssn' => false,
-                'ssn' => '',
-                'government_id' => '',
-                'issuing_entity' => '',
-                'evicted' => false,
-                'eviction_reason' => '',
-                'felony' => false,
-                'felony_reason' => '',
-                'legal_case' => false,
-                'legal_case_details' => ''
+            'screening' => [
+                'date_of_birth' => ($this->screening && !empty($this->screening->date_of_birth)) 
+                    ? (is_object($this->screening->date_of_birth) ? $this->screening->date_of_birth->format('Y-m-d') : substr((string)$this->screening->date_of_birth, 0, 10))
+                    : ($this->personalInformation && !empty($this->personalInformation->date_of_birth) ? substr((string)$this->personalInformation->date_of_birth, 0, 10) : ''),
+                'screening_country' => $this->screening?->screening_country ?? '',
+                'has_ssn' => (bool) ($this->screening?->has_ssn ?? false),
+                'ssn' => $this->screening?->ssn ?? '',
+                'government_id' => $this->screening?->government_id ?? '',
+                'issuing_entity' => $this->screening?->issuing_entity ?? '',
+                'evicted' => (bool) ($this->screening?->evicted ?? false),
+                'eviction_reason' => $this->screening?->eviction_reason ?? '',
+                'felony' => (bool) ($this->screening?->felony ?? false),
+                'felony_reason' => $this->screening?->felony_reason ?? '',
+                'legal_case' => (bool) ($this->screening?->legal_case ?? false),
+                'legal_case_details' => $this->screening?->legal_case_details ?? ''
             ],
 
             // Step 7: Pets
@@ -427,7 +429,7 @@ class Applicant extends Model
             case 4:
                 return !empty($data['employment']['employment_country']);
             case 6:
-                return !empty($data['screening']['date_of_birth']);
+                return !empty($data['screening']['date_of_birth']) || !empty($data['personal_info']['date_of_birth']);
             case 9:
                 return !empty($data['emergency_contact']['full_name'])
                     && !empty($data['emergency_contact']['relationship'])

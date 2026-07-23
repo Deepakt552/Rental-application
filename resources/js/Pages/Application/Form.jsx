@@ -571,9 +571,140 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         }
     };
 
+    // Validate current step required fields before any navigation
+    const validateCurrentStep = (stepNum = currentStep) => {
+        const newErrors = {};
+        let isValid = true;
+
+        if (stepNum === 1) {
+            if (!formData.personal_info.first_name?.trim()) {
+                newErrors['personal_info.first_name'] = 'First name is required';
+                isValid = false;
+            }
+            if (!formData.personal_info.last_name?.trim()) {
+                newErrors['personal_info.last_name'] = 'Last name is required';
+                isValid = false;
+            }
+            if (!formData.personal_info.date_of_birth) {
+                newErrors['personal_info.date_of_birth'] = 'Date of birth is required';
+                isValid = false;
+            }
+            if (!formData.personal_info.phone?.trim()) {
+                newErrors['personal_info.phone'] = 'Phone is required';
+                isValid = false;
+            }
+            if (!formData.personal_info.email?.trim()) {
+                newErrors['personal_info.email'] = 'Email is required';
+                isValid = false;
+            }
+
+            const passwordFieldVisible = !auth?.user && (!applicantId || errors['personal_info.password'] || errors['password'] || (formData.personal_info.password && formData.personal_info.password.length > 0));
+            if (passwordFieldVisible) {
+                if (!formData.personal_info.password) {
+                    newErrors['personal_info.password'] = 'Password is required';
+                    isValid = false;
+                } else if (formData.personal_info.password.length < 8) {
+                    newErrors['personal_info.password'] = 'Password must be at least 8 characters';
+                    isValid = false;
+                }
+                if (formData.personal_info.password !== formData.personal_info.password_confirmation) {
+                    newErrors['personal_info.password_confirmation'] = 'Passwords do not match';
+                    isValid = false;
+                }
+            }
+        } else if (stepNum === 2) {
+            if (!formData.current_address.country?.trim()) {
+                newErrors['current_address.country'] = 'Country is required';
+                isValid = false;
+            }
+            if (!formData.current_address.address_line_1?.trim()) {
+                newErrors['current_address.address_line_1'] = 'Address Line 1 is required';
+                isValid = false;
+            }
+            if (!formData.current_address.city?.trim()) {
+                newErrors['current_address.city'] = 'City is required';
+                isValid = false;
+            }
+            if (!formData.current_address.state?.trim()) {
+                newErrors['current_address.state'] = 'State is required';
+                isValid = false;
+            }
+            if (!formData.current_address.zip_code?.trim()) {
+                newErrors['current_address.zip_code'] = 'ZIP Code is required';
+                isValid = false;
+            }
+        } else if (stepNum === 4) {
+            if (!formData.employment.employment_country?.trim()) {
+                newErrors['employment.employment_country'] = 'Employment country is required';
+                isValid = false;
+            }
+        } else if (stepNum === 6) {
+            const screeningDob = formData.screening.date_of_birth || formData.personal_info.date_of_birth;
+            if (screeningDob && !formData.screening.date_of_birth) {
+                setFormData(prev => ({
+                    ...prev,
+                    screening: { ...prev.screening, date_of_birth: screeningDob }
+                }));
+            }
+            if (!screeningDob) {
+                newErrors['screening.date_of_birth'] = 'Date of birth is required';
+                isValid = false;
+            }
+            if (formData.screening.has_ssn && !formData.screening.ssn?.trim()) {
+                newErrors['screening.ssn'] = 'SSN is required';
+                isValid = false;
+            }
+            if (formData.screening.evicted && !formData.screening.eviction_reason?.trim()) {
+                newErrors['screening.eviction_reason'] = 'Eviction explanation is required';
+                isValid = false;
+            }
+            if (formData.screening.felony && !formData.screening.felony_reason?.trim()) {
+                newErrors['screening.felony_reason'] = 'Felony explanation is required';
+                isValid = false;
+            }
+            if (formData.screening.legal_case && !formData.screening.legal_case_details?.trim()) {
+                newErrors['screening.legal_case_details'] = 'Legal case details are required';
+                isValid = false;
+            }
+        } else if (stepNum === 9) {
+            if (!formData.emergency_contact.full_name?.trim()) {
+                newErrors['emergency_contact.full_name'] = 'Full name is required';
+                isValid = false;
+            }
+            if (!formData.emergency_contact.relationship?.trim()) {
+                newErrors['emergency_contact.relationship'] = 'Relationship is required';
+                isValid = false;
+            }
+            if (!formData.emergency_contact.phone?.trim()) {
+                newErrors['emergency_contact.phone'] = 'Phone is required';
+                isValid = false;
+            }
+        }
+
+        if (!isValid) {
+            setErrors(prev => ({ ...prev, ...newErrors }));
+            const firstErrorMsg = Object.values(newErrors)[0];
+            setErrorMessage(`Cannot navigate: Please complete all required fields on Step ${stepNum} (${firstErrorMsg}).`);
+            toast.error(`Please complete required fields on Step ${stepNum}`);
+            setTimeout(() => {
+                const firstErrorField = document.querySelector('.border-red-500');
+                if (firstErrorField) {
+                    firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+
+        return isValid;
+    };
+
     // Next step - Save current step and move forward
     const nextStep = async () => {
         setErrorMessage('');
+
+        if (!validateCurrentStep(currentStep)) {
+            return;
+        }
+
         // Only block if there are errors for the CURRENT step
         const currentStepPrefixes = {
             1: 'personal_info',
@@ -589,36 +720,6 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         };
 
         const prefix = currentStepPrefixes[currentStep];
-
-        // Custom frontend validation for Step 1
-        if (currentStep === 1) {
-            const newErrors = { ...errors };
-            let hasError = false;
-
-            // Password confirmation check
-            const passwordFieldVisible = !auth?.user && (!applicantId || errors['personal_info.password'] || (formData.personal_info.password && formData.personal_info.password.length > 0));
-
-            if (passwordFieldVisible) {
-                if (!formData.personal_info.password) {
-                    newErrors['personal_info.password'] = 'Password is required';
-                    hasError = true;
-                } else if (formData.personal_info.password.length < 8) {
-                    newErrors['personal_info.password'] = 'Password must be at least 8 characters';
-                    hasError = true;
-                }
-
-                if (formData.personal_info.password !== formData.personal_info.password_confirmation) {
-                    newErrors['personal_info.password_confirmation'] = 'Passwords do not match';
-                    hasError = true;
-                }
-            }
-
-            if (hasError) {
-                setErrors(newErrors);
-                setErrorMessage('Please fix the following errors: ' + Object.values(newErrors).join(', '));
-                return;
-            }
-        }
 
         const hasCurrentStepErrors = Object.keys(errors).some(key => key.startsWith(prefix) || key === 'email' || key === 'phone');
 
@@ -689,6 +790,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
     // Previous step
     const prevStep = async () => {
+        setErrorMessage('');
+        if (!validateCurrentStep(currentStep)) {
+            return;
+        }
+
         if (currentStep > 1) {
             // Save current step before leaving (except step 1 which already saved)
             if (currentStep !== 1) {
@@ -704,44 +810,14 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
     // Go to specific step (navigation click)
     const goToStep = async (step) => {
-        // If clicking a different step while on Step 1, ensure validation/init
-        if (currentStep === 1 && step !== 1) {
-            const newErrors = { ...errors };
-            let hasError = false;
+        if (step === currentStep) return;
+        setErrorMessage('');
 
-            // Password confirmation check
-            const passwordFieldVisible = !auth?.user && (!applicantId || errors['personal_info.password'] || (formData.personal_info.password && formData.personal_info.password.length > 0));
+        if (!validateCurrentStep(currentStep)) {
+            return;
+        }
 
-            if (passwordFieldVisible) {
-                if (!formData.personal_info.password) {
-                    newErrors['personal_info.password'] = 'Password is required';
-                    hasError = true;
-                } else if (formData.personal_info.password.length < 8) {
-                    newErrors['personal_info.password'] = 'Password must be at least 8 characters';
-                    hasError = true;
-                }
-
-                if (formData.personal_info.password !== formData.personal_info.password_confirmation) {
-                    newErrors['personal_info.password_confirmation'] = 'Passwords do not match';
-                    hasError = true;
-                }
-            }
-
-            if (!formData.personal_info.first_name) { newErrors['personal_info.first_name'] = 'First name is required'; hasError = true; }
-            if (!formData.personal_info.last_name) { newErrors['personal_info.last_name'] = 'Last name is required'; hasError = true; }
-            if (!formData.personal_info.phone) { newErrors['personal_info.phone'] = 'Phone is required'; hasError = true; }
-            if (!formData.personal_info.email) { newErrors['personal_info.email'] = 'Email is required'; hasError = true; }
-
-            if (hasError) {
-                setErrors(newErrors);
-                setErrorMessage('Please fix the errors on Step 1 before navigating.');
-                return;
-            }
-
-            if (applicantId) {
-                await saveCurrentStep();
-            }
-        } else if (applicantId) {
+        if (applicantId) {
             await saveCurrentStep();
         }
 
@@ -787,7 +863,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     setFormData(prev => ({ ...prev, previous_employment: fd.previous_employment }));
                     setShowPreviousEmployment(true);
                 }
-                if (fd.screening) setFormData(prev => ({ ...prev, screening: fd.screening }));
+                if (fd.screening) {
+                    const dob = (fd.screening.date_of_birth || fd.personal_info?.date_of_birth || '').split('T')[0];
+                    setFormData(prev => ({ ...prev, screening: { ...fd.screening, date_of_birth: dob } }));
+                }
                 if (fd.pets && fd.pets.length > 0) setPets(fd.pets);
                 if (fd.vehicles && fd.vehicles.length > 0) setVehicles(fd.vehicles);
                 if (fd.emergency_contact) setFormData(prev => ({ ...prev, emergency_contact: fd.emergency_contact }));
@@ -1008,7 +1087,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             setFormData(prev => ({ ...prev, previous_employment: fd.previous_employment }));
                             setShowPreviousEmployment(true);
                         }
-                        if (fd.screening) setFormData(prev => ({ ...prev, screening: fd.screening }));
+                        if (fd.screening) {
+                            const dob = (fd.screening.date_of_birth || fd.personal_info?.date_of_birth || '').split('T')[0];
+                            setFormData(prev => ({ ...prev, screening: { ...fd.screening, date_of_birth: dob } }));
+                        }
                         if (fd.pets) setPets(fd.pets);
                         if (fd.vehicles) setVehicles(fd.vehicles);
                         if (fd.emergency_contact) setFormData(prev => ({ ...prev, emergency_contact: fd.emergency_contact }));
@@ -1146,7 +1228,14 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         }
 
         setErrors(newErrors);
-        setFormData(prev => ({ ...prev, personal_info: { ...prev.personal_info, [field]: newValue } }));
+        setFormData(prev => ({
+            ...prev,
+            personal_info: { ...prev.personal_info, [field]: newValue },
+            screening: field === 'date_of_birth' ? {
+                ...prev.screening,
+                date_of_birth: (!prev.screening.date_of_birth || prev.screening.date_of_birth === prev.personal_info.date_of_birth) ? newValue : prev.screening.date_of_birth
+            } : prev.screening
+        }));
     };
 
     const updateCurrentAddress = (field, value) => {
@@ -2016,7 +2105,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
                 <input
                     type="date"
-                    value={formData.screening.date_of_birth}
+                    value={formData.screening.date_of_birth || formData.personal_info.date_of_birth || ''}
                     onChange={(e) => updateScreening('date_of_birth', e.target.value)}
                     className={getFieldClass('screening.date_of_birth')}
                 />

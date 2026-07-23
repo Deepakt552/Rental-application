@@ -562,6 +562,13 @@ class ApplicationController extends Controller
      */
     public function saveStep6(Request $request)
     {
+        if ($request->has('applicant_id') && empty($request->date_of_birth)) {
+            $applicantObj = Applicant::find($request->applicant_id);
+            if ($applicantObj && $applicantObj->personalInformation && !empty($applicantObj->personalInformation->date_of_birth)) {
+                $request->merge(['date_of_birth' => $applicantObj->personalInformation->date_of_birth]);
+            }
+        }
+
         $request->validate([
             'applicant_id' => 'required|exists:applicants,id',
             'date_of_birth' => 'required|date|before:today|after:-100 years',

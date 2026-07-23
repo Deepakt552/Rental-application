@@ -24,7 +24,7 @@ class Screening extends Model
     ];
 
     protected $casts = [
-        'date_of_birth' => 'date',
+        'date_of_birth' => 'date:Y-m-d',
         'has_ssn' => 'boolean',
         'evicted' => 'boolean',
         'felony' => 'boolean',
