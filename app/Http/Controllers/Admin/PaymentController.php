@@ -13,14 +13,22 @@ class PaymentController extends Controller
     {
         $query = Payment::with(['applicant.personalInformation', 'user']);
 
-        if ($request->has('search')) {
+        if ($request->has('search') && !empty($request->get('search'))) {
             $search = $request->get('search');
-            $query->where('stripe_payment_intent_id', 'like', "%{$search}%")
-                ->orWhereHas('applicant.personalInformation', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%");
-                });
+            $query->where(function ($q) use ($search) {
+                $q->where('stripe_payment_intent_id', 'like', "%{$search}%")
+                    ->orWhereHas('applicant.personalInformation', function ($q2) use ($search) {
+                        $q2->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('applicant', function ($q3) use ($search) {
+                        $q3->where('email', 'like', "%{$search}%");
+                    });
+            });
         }
+
+        // Clone base query with search filter applied before status filter
+        $baseQuery = clone $query;
 
         if ($request->has('status') && $request->get('status') != '') {
             $query->where('status', $request->get('status'));
@@ -40,8 +48,19 @@ class PaymentController extends Controller
         $payments = $query->paginate(15);
         $payments->appends($request->only(['search', 'status', 'sort_by', 'sort_dir']));
 
+        // Calculate full dataset stats (only succeeded/completed payments count towards total revenue)
+        $stats = [
+            'total_revenue' => (float) (clone $baseQuery)->where('status', 'completed')->sum('amount'),
+            'completed_revenue' => (float) (clone $baseQuery)->where('status', 'completed')->sum('amount'),
+            'pending_count' => (int) (clone $baseQuery)->where('status', 'pending')->count(),
+            'failed_count' => (int) (clone $baseQuery)->where('status', 'failed')->count(),
+            'total_count' => (int) (clone $baseQuery)->count(),
+            'completed_count' => (int) (clone $baseQuery)->where('status', 'completed')->count(),
+        ];
+
         return Inertia::render('Admin/Payments', [
             'payments' => $payments,
+            'stats' => $stats,
             'filters' => [
                 'search' => $request->get('search', ''),
                 'status' => $request->get('status', ''),
@@ -57,11 +76,16 @@ class PaymentController extends Controller
 
         if ($request->has('search') && !empty($request->get('search'))) {
             $search = $request->get('search');
-            $query->where('stripe_payment_intent_id', 'like', "%{$search}%")
-                ->orWhereHas('applicant.personalInformation', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%");
-                });
+            $query->where(function ($q) use ($search) {
+                $q->where('stripe_payment_intent_id', 'like', "%{$search}%")
+                    ->orWhereHas('applicant.personalInformation', function ($q2) use ($search) {
+                        $q2->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('applicant', function ($q3) use ($search) {
+                        $q3->where('email', 'like', "%{$search}%");
+                    });
+            });
         }
 
         if ($request->has('status') && $request->get('status') != '') {

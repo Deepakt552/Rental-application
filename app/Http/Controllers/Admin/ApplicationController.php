@@ -220,15 +220,10 @@ class ApplicationController extends Controller
         // Preserve query parameters in pagination links
         $applicants->appends($request->only(['search', 'status', 'type', 'sort_by', 'sort_dir']));
 
-        // Get TOTAL counts from database (without any filters except type)
+        // Get TOTAL counts from database (without pagination limit)
         $totalAdmin = Applicant::where('type', 'admin')->count();
         $totalSuperAdmin = Applicant::where('type', 'superadmin')->count();
-
-        // Debug: Log the counts
-        Log::info('Total Admin Count: ' . $totalAdmin);
-        Log::info('Total SuperAdmin Count: ' . $totalSuperAdmin);
-        Log::info('Current Page Records Count: ' . $applicants->count());
-        Log::info('Current Page Type Filter: ' . $request->get('type'));
+        $submittedCount = Applicant::where('status', 'submitted')->count();
 
         return Inertia::render('Admin/Applications', [
             'applicants' => $applicants,
@@ -241,6 +236,7 @@ class ApplicationController extends Controller
             ],
             'total_admin' => $totalAdmin,
             'total_superadmin' => $totalSuperAdmin,
+            'submitted_count' => $submittedCount,
         ]);
     }
 

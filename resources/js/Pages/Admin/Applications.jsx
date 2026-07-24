@@ -9,7 +9,7 @@ import {
     TrendingUp
 } from 'lucide-react';
 
-export default function Applications({ applicants, filters }) {
+export default function Applications({ applicants, filters, total_admin, total_superadmin, submitted_count }) {
     const [searchTerm, setSearchTerm] = useState(filters.search || '');
     const [statusFilter, setStatusFilter] = useState(filters.status || '');
     const [sortBy, setSortBy] = useState(filters.sort_by || 'created_at');
@@ -81,9 +81,9 @@ export default function Applications({ applicants, filters }) {
     const getStatus = (s) => statusConfig[s] || statusConfig.draft;
 
     const total     = applicants.total || 0;
-    const submitted = applicants.data?.filter(a => a.status === 'submitted').length || 0;
-    const drafts    = applicants.data?.filter(a => !a.status || a.status === 'draft').length || 0;
-    const paid      = applicants.data?.filter(a => a.payment_status === 'paid').length || 0;
+    const submitted = submitted_count ?? (applicants.data?.filter(a => a.status === 'submitted').length || 0);
+    const triumphCount = total_admin ?? (applicants.data?.filter(a => a.type === 'admin').length || 0);
+    const excelCount = total_superadmin ?? (applicants.data?.filter(a => a.type === 'superadmin').length || 0);
 
     const pageTitle = currentType === 'admin' ? 'Triumph Applications'
         : currentType === 'superadmin' ? 'Excel Applications'
@@ -157,7 +157,7 @@ export default function Applications({ applicants, filters }) {
                             },
                             {
                                 label: 'Triumph',
-                                value: applicants.data?.filter(a => a.type === 'admin').length || 0,
+                                value: triumphCount,
                                 sub: 'Triumph type',
                                 icon: Building2,
                                 accent: '#1a6bb5',
@@ -165,7 +165,7 @@ export default function Applications({ applicants, filters }) {
                             },
                             {
                                 label: 'Excel',
-                                value: applicants.data?.filter(a => a.type === 'superadmin').length || 0,
+                                value: excelCount,
                                 sub: 'Excel type',
                                 icon: Crown,
                                 accent: '#7c3aed',

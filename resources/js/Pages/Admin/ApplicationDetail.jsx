@@ -215,8 +215,10 @@ export default function ApplicationDetail({ applicant }) {
                                         <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Consent: {applicant.is_consent_completed ? 'Completed' : 'Pending'}</span>
                                     </div>
                                     <div className="px-3.5 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl flex items-center gap-2">
-                                        <CreditCard className={`w-4 h-4 ${applicant.payment_status === 'completed' ? 'text-green-500' : 'text-slate-400'}`} />
-                                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Payment: {applicant.payment_status || 'Pending'}</span>
+                                        <CreditCard className={`w-4 h-4 ${(applicant.payment_status === 'paid' || applicant.payment_status === 'completed') ? 'text-green-500' : 'text-slate-400'}`} />
+                                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                                            Payment: {(applicant.payment_status === 'paid' || applicant.payment_status === 'completed') ? 'Paid' : (applicant.payment_status === 'unpaid' ? 'Unpaid' : (applicant.payment_status ? applicant.payment_status.charAt(0).toUpperCase() + applicant.payment_status.slice(1) : 'Pending'))}
+                                        </span>
                                     </div>
                                     <a
                                         href={`/rental-application?applicant_id=${applicant.id}`}

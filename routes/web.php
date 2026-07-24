@@ -169,7 +169,7 @@ Route::get('/dashboard', function () {
                 ]),
                 'payments' => $applicant->payments->map(fn($p) => [
                     'id' => $p->id,
-                    'amount' => $p->amount / 100,
+                    'amount' => (float) $p->amount,
                     'status' => $p->status,
                     'created_at' => $p->created_at->format('M d, Y')
                 ]),

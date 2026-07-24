@@ -7,7 +7,7 @@ import {
     ArrowUpDown, CalendarDays, Inbox
 } from 'lucide-react';
 
-export default function Payments({ payments, filters }) {
+export default function Payments({ payments, stats, filters }) {
     const [searchTerm, setSearchTerm] = useState(filters.search || '');
     const [statusFilter, setStatusFilter] = useState(filters.status || '');
     const [sortBy, setSortBy] = useState(filters.sort_by || 'created_at');
@@ -46,10 +46,11 @@ export default function Payments({ payments, filters }) {
             : <ArrowDown className="w-3 h-3 inline-block ml-1 text-[#0e4a81] dark:text-[#5a9bd5]" />;
     };
 
-    const totalRevenue = payments.data?.reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0;
-    const completedRevenue = payments.data?.filter(p => p.status === 'completed').reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0;
-    const pendingCount = payments.data?.filter(p => p.status === 'pending').length || 0;
-    const failedCount = payments.data?.filter(p => p.status === 'failed').length || 0;
+    // Calculate from full backend stats if provided, otherwise compute from dataset completed payments only
+    const completedRevenue = stats?.completed_revenue ?? (payments.data?.filter(p => p.status === 'completed').reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0);
+    const totalRevenue = stats?.total_revenue ?? completedRevenue; // Only count succeeded/completed payments towards revenue
+    const pendingCount = stats?.pending_count ?? (payments.data?.filter(p => p.status === 'pending').length || 0);
+    const failedCount = stats?.failed_count ?? (payments.data?.filter(p => p.status === 'failed').length || 0);
 
     const statusConfig = {
         completed: { cls: 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400', icon: CheckCircle, label: 'Completed' },
@@ -59,10 +60,10 @@ export default function Payments({ payments, filters }) {
     const getStatus = (s) => statusConfig[s] || { cls: 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400', icon: AlertCircle, label: s || 'Unknown' };
 
     const STATUS_TABS = [
-        { value: '', label: 'All Payments' },
-        { value: 'completed', label: 'Completed' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'failed', label: 'Failed' },
+        { value: '', label: 'All Payments', count: stats?.total_count },
+        { value: 'completed', label: 'Completed', count: stats?.completed_count },
+        { value: 'pending', label: 'Pending', count: stats?.pending_count },
+        { value: 'failed', label: 'Failed', count: stats?.failed_count },
     ];
 
     const COLS = [
@@ -103,8 +104,8 @@ export default function Payments({ payments, filters }) {
                     {/* ── Stats ── */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                         {[
-                            { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, sub: 'All transactions', icon: DollarSign, accent: '#0e4a81', light: '#e6eef7' },
-                            { label: 'Completed', value: `$${completedRevenue.toLocaleString()}`, sub: 'Successful payments', icon: CheckCircle, accent: '#059669', light: '#d1fae5' },
+                            { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: 'Successful payments total', icon: DollarSign, accent: '#0e4a81', light: '#e6eef7' },
+                            { label: 'Completed', value: `$${completedRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: 'Successful payments', icon: CheckCircle, accent: '#059669', light: '#d1fae5' },
                             { label: 'Pending', value: pendingCount.toLocaleString(), sub: 'Transactions waiting', icon: Clock, accent: '#d97706', light: '#fef3c7' },
                             { label: 'Failed', value: failedCount.toLocaleString(), sub: 'Failed transactions', icon: AlertCircle, accent: '#e11d48', light: '#ffe4e6' },
                         ].map(({ label, value, sub, icon: Icon, accent, light }) => (
@@ -135,6 +136,15 @@ export default function Payments({ payments, filters }) {
                                         : 'relative px-5 py-2.5 text-xs font-semibold whitespace-nowrap transition-all rounded-t-lg mr-0.5 text-slate-400 dark:text-slate-500'}
                                 >
                                     {tab.label}
+                                    {tab.count !== undefined && tab.count !== null && (
+                                        <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                            statusFilter === tab.value 
+                                                ? 'bg-[#0e4a81] dark:bg-[#5a9bd5] text-white'
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                                        }`}>
+                                            {tab.count.toLocaleString()}
+                                        </span>
+                                    )}
                                 </button>
                             ))}
                         </div>
