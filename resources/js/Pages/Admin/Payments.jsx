@@ -78,7 +78,7 @@ export default function Payments({ payments, stats, filters }) {
     return (
         <AuthenticatedLayout>
             <div className="min-h-screen dark:bg-slate-900">
-                <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-7">
+                <div className="w-full px-4 sm:px-6 lg:px-8 py-7">
 
                     {/* ── Header ── */}
                     <div className="flex items-start justify-between mb-7">

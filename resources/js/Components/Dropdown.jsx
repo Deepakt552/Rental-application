@@ -27,7 +27,7 @@ const Trigger = ({ children }) => {
 
             {open && (
                 <div
-                    className="fixed inset-0 z-40"
+                    className="fixed inset-0 z-[100]"
                     onClick={() => setOpen(false)}
                 ></div>
             )}
@@ -37,25 +37,26 @@ const Trigger = ({ children }) => {
 
 const Content = ({
     align = 'right',
-    width = '48',
-    contentClasses = 'py-1 bg-white dark:bg-slate-800',
+    width = '64',
+    contentClasses = 'py-1 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800',
     children,
 }) => {
     const { open, setOpen } = useContext(DropDownContext);
 
-    let alignmentClasses = 'origin-top';
+    let alignmentClasses = 'origin-top-right right-0';
 
     if (align === 'left') {
-        alignmentClasses = 'ltr:origin-top-left rtl:origin-top-right start-0';
+        alignmentClasses = 'origin-top-left left-0';
     } else if (align === 'right') {
-        alignmentClasses = 'ltr:origin-top-right rtl:origin-top-left end-0';
+        alignmentClasses = 'origin-top-right right-0';
     }
 
-    let widthClasses = '';
-
-    if (width === '48') {
-        widthClasses = 'w-48';
-    }
+    let widthClass = 'w-64 max-w-[calc(100vw-1.5rem)]';
+    if (width === '48') widthClass = 'w-48 max-w-[calc(100vw-1.5rem)]';
+    if (width === '56') widthClass = 'w-56 max-w-[calc(100vw-1.5rem)]';
+    if (width === '64') widthClass = 'w-64 max-w-[calc(100vw-1.5rem)]';
+    if (width === '72') widthClass = 'w-72 max-w-[calc(100vw-1.5rem)]';
+    if (width === 'full') widthClass = 'w-full';
 
     return (
         <>
@@ -69,15 +70,10 @@ const Content = ({
                 leaveTo="opacity-0 scale-95"
             >
                 <div
-                    className={`absolute z-50 mt-2 rounded-md shadow-lg ${alignmentClasses} ${widthClasses}`}
+                    className={`absolute z-[100] mt-2 ${alignmentClasses} ${widthClass}`}
                     onClick={() => setOpen(false)}
                 >
-                    <div
-                        className={
-                            `rounded-md ring-1 ring-black ring-opacity-5 ` +
-                            contentClasses
-                        }
-                    >
+                    <div className={contentClasses}>
                         {children}
                     </div>
                 </div>

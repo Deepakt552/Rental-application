@@ -37,6 +37,8 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     const [propertyTypes, setPropertyTypes] = useState([]);
     const [selectedPropertyType, setSelectedPropertyType] = useState('');
     const [propertyLoading, setPropertyLoading] = useState(false);
+    const [propertyModalError, setPropertyModalError] = useState('');
+    const [showErrorModal, setShowErrorModal] = useState(false);
 
     // Check if property details are set on load
     useEffect(() => {
@@ -94,8 +96,15 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     };
 
     const handlePropertySubmit = () => {
-        if (!companyName || !selectedProperty || !selectedPropertyType || !desiredMoveDate) {
-            toast.error('Please fill all fields');
+        setPropertyModalError('');
+
+        const missing = [];
+        if (!selectedProperty) missing.push('Property Name');
+        if (!selectedPropertyType) missing.push('Property Type');
+        if (!desiredMoveDate) missing.push('Desired Move Date');
+
+        if (missing.length > 0) {
+            setPropertyModalError(`Please complete required fields: ${missing.join(', ')}.`);
             return;
         }
 
@@ -144,6 +153,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     const [showPreviousAddress, setShowPreviousAddress] = useState(false);
     const [showPreviousEmployment, setShowPreviousEmployment] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
     const emailCheckTimer = useRef(null);
 
     // Form data
@@ -225,6 +235,19 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         { number: 10, title: 'Documents', icon: Upload, required: false }
     ];
 
+    const activeStepRef = useRef(null);
+
+    // Auto-scroll active step indicator into view on mobile when step changes
+    useEffect(() => {
+        if (activeStepRef.current) {
+            activeStepRef.current.scrollIntoView({
+                behavior: 'smooth',
+                inline: 'center',
+                block: 'nearest'
+            });
+        }
+    }, [currentStep]);
+
     // Heartbeat to keep session alive
     useEffect(() => {
         const heartbeat = setInterval(() => {
@@ -257,65 +280,86 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     };
 
     // Compress image files client-side before uploading (60% quality = ~40%+ size reduction)
-    const compressImage = (file) => {
-        return new Promise((resolve) => {
-            if (!file || !file.type || !file.type.startsWith('image/')) {
-                return resolve(file); // Non-images (like PDF) return unchanged
-            }
+ const compressImage = (file) => {
+    return new Promise((resolve) => {
+        if (!file || !file.type?.startsWith("image/")) {
+            return resolve(file);
+        }
 
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
+        const reader = new FileReader();
 
-                    const MAX_WIDTH = 1920;
-                    const MAX_HEIGHT = 1920;
+        reader.onload = (e) => {
+            const img = new Image();
 
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height = Math.round((height * MAX_WIDTH) / width);
-                            width = MAX_WIDTH;
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+
+                let width = img.width;
+                let height = img.height;
+
+                const MAX_WIDTH = 1920;
+                const MAX_HEIGHT = 1920;
+
+                // Resize only if image is larger
+                if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+                    const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext("2d");
+
+                // Better rendering for text
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = "high";
+
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Preserve PNG if uploaded
+                const outputType =
+                    file.type === "image/png" ? "image/png" : "image/jpeg";
+
+                const quality = 0.9; // 90% quality
+
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) return resolve(file);
+
+                        // Don't use compressed file if it's larger
+                        if (blob.size >= file.size) {
+                            return resolve(file);
                         }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width = Math.round((width * MAX_HEIGHT) / height);
-                            height = MAX_HEIGHT;
-                        }
-                    }
 
-                    canvas.width = width;
-                    canvas.height = height;
+                        const extension =
+                            outputType === "image/png" ? "png" : "jpg";
 
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
+                        const name =
+                            file.name.substring(0, file.name.lastIndexOf(".")) ||
+                            file.name;
 
-                    canvas.toBlob(
-                        (blob) => {
-                            if (!blob) {
-                                return resolve(file);
-                            }
-                            const fileName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-                            const compressedFile = new File([blob], `${fileName}.jpg`, {
-                                type: 'image/jpeg',
-                                lastModified: Date.now()
-                            });
-                            resolve(compressedFile);
-                        },
-                        'image/jpeg',
-                        0.6
-                    );
-                };
-                img.onerror = () => resolve(file);
-                img.src = event.target.result;
+                        resolve(
+                            new File([blob], `${name}.${extension}`, {
+                                type: outputType,
+                                lastModified: Date.now(),
+                            })
+                        );
+                    },
+                    outputType,
+                    quality
+                );
             };
-            reader.onerror = () => resolve(file);
-            reader.readAsDataURL(file);
-        });
-    };
 
+            img.onerror = () => resolve(file);
+            img.src = e.target.result;
+        };
+
+        reader.onerror = () => resolve(file);
+        reader.readAsDataURL(file);
+    });
+};
     // Direct Upload Handler: Compresses images & uploads file immediately to server on selection
     const handleDirectFileUpload = async (docType, filesToUpload, description = '') => {
         const idToUse = applicantId || localStorage.getItem('applicant_id');
@@ -766,6 +810,19 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     isValid = false;
                 }
             }
+
+            additionalPersons.forEach((person, idx) => {
+                if (person.full_name?.trim()) {
+                    if (!person.relationship?.trim()) {
+                        newErrors[`additional_persons.${idx}.relationship`] = `Relationship is required for ${person.full_name}`;
+                        isValid = false;
+                    }
+                    if (!person.date_of_birth) {
+                        newErrors[`additional_persons.${idx}.date_of_birth`] = `Date of Birth is required for ${person.full_name}`;
+                        isValid = false;
+                    }
+                }
+            });
         } else if (stepNum === 2) {
             if (!formData.current_address.country?.trim()) {
                 newErrors['current_address.country'] = 'Country is required';
@@ -846,6 +903,31 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             }, 100);
+        } else {
+            const stepPrefixes = {
+                1: 'personal_info',
+                2: 'current_address',
+                3: 'previous_address',
+                4: 'employment',
+                5: 'previous_employment',
+                6: 'screening',
+                7: 'pets',
+                8: 'vehicles',
+                9: 'emergency_contact',
+                10: 'documents'
+            };
+            const prefix = stepPrefixes[stepNum];
+            if (prefix) {
+                setErrors(prev => {
+                    const cleaned = { ...prev };
+                    Object.keys(cleaned).forEach(key => {
+                        if (key.startsWith(prefix)) {
+                            delete cleaned[key];
+                        }
+                    });
+                    return cleaned;
+                });
+            }
         }
 
         return isValid;
@@ -856,38 +938,6 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         setErrorMessage('');
 
         if (!validateCurrentStep(currentStep)) {
-            return;
-        }
-
-        // Only block if there are errors for the CURRENT step
-        const currentStepPrefixes = {
-            1: 'personal_info',
-            2: 'current_address',
-            3: 'previous_address',
-            4: 'employment',
-            5: 'previous_employment',
-            6: 'screening',
-            7: 'pets',
-            8: 'vehicles',
-            9: 'emergency_contact',
-            10: 'documents'
-        };
-
-        const prefix = currentStepPrefixes[currentStep];
-
-        const hasCurrentStepErrors = Object.keys(errors).some(key => key.startsWith(prefix) || key === 'email' || key === 'phone');
-
-        if (hasCurrentStepErrors) {
-            const relevantErrors = Object.entries(errors)
-                .filter(([key]) => key.startsWith(prefix) || key === 'email' || key === 'phone')
-                .map(([_, msg]) => msg);
-
-            setErrorMessage(`Please fix the following errors: ${relevantErrors.join(', ')}`);
-            // Scroll to first error
-            const firstErrorField = document.querySelector('.border-red-500');
-            if (firstErrorField) {
-                firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
             return;
         }
 
@@ -1739,15 +1789,27 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                 <input type="text" placeholder="Full Name" value={person.full_name} onChange={(e) => updatePerson(idx, 'full_name', e.target.value)} className="w-full rounded-md border-gray-300" />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Date of Birth</label>
-                                <input type="date" value={person.date_of_birth} onChange={(e) => updatePerson(idx, 'date_of_birth', e.target.value)} className="w-full rounded-md border-gray-300" />
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                    Date of Birth {person.full_name?.trim() ? <span className="text-red-500">*</span> : null}
+                                </label>
+                                <input
+                                    type="date"
+                                    value={person.date_of_birth}
+                                    onChange={(e) => updatePerson(idx, 'date_of_birth', e.target.value)}
+                                    className={`w-full rounded-md ${errors[`additional_persons.${idx}.date_of_birth`] ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
+                                />
+                                {errors[`additional_persons.${idx}.date_of_birth`] && (
+                                    <p className="text-red-500 text-[11px] mt-1 font-semibold">{errors[`additional_persons.${idx}.date_of_birth`]}</p>
+                                )}
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Relationship</label>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                    Relationship {person.full_name?.trim() ? <span className="text-red-500">*</span> : null}
+                                </label>
                                 <select
                                     value={person.relationship}
                                     onChange={(e) => updatePerson(idx, 'relationship', e.target.value)}
-                                    className="w-full rounded-md border-gray-300"
+                                    className={`w-full rounded-md ${errors[`additional_persons.${idx}.relationship`] ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                                 >
                                     <option value="">Select Relationship</option>
                                     <option value="Spouse">Spouse</option>
@@ -1757,6 +1819,9 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     <option value="Roommate">Roommate</option>
                                     <option value="Other">Other</option>
                                 </select>
+                                {errors[`additional_persons.${idx}.relationship`] && (
+                                    <p className="text-red-500 text-[11px] mt-1 font-semibold">{errors[`additional_persons.${idx}.relationship`]}</p>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">Phone Number</label>
@@ -3062,6 +3127,36 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     </div>
                 )}
 
+                {/* Submission Error Modal */}
+                {showErrorModal && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowErrorModal(false)}></div>
+                        <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 border border-slate-200 z-10 animate-in fade-in zoom-in duration-200">
+                            <div className="flex items-center gap-3 text-red-600 mb-4">
+                                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                                    <AlertCircle className="w-6 h-6 text-red-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-slate-800">Step 1 Submission Error</h3>
+                                    <p className="text-xs text-slate-500 font-medium">Your entered details have been preserved.</p>
+                                </div>
+                            </div>
+                            <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl mb-5 text-xs text-red-800 whitespace-pre-line leading-relaxed font-semibold">
+                                {errorMessage || 'An error occurred while saving your details. Please check your information and try again.'}
+                            </div>
+                            <div className="flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowErrorModal(false)}
+                                    className="px-5 py-2.5 bg-slate-800 text-white text-xs font-bold rounded-xl hover:bg-slate-900 transition-all shadow-sm"
+                                >
+                                    Understand & Retry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Property Selection Modal */}
                 {showPropertyModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -3073,6 +3168,16 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     Enter Property Details
                                 </h2>
                             </div>
+
+                            {propertyModalError && (
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                                        <span>{propertyModalError}</span>
+                                    </div>
+                                    <button type="button" onClick={() => setPropertyModalError('')} className="text-red-700 hover:text-red-900 font-bold shrink-0">✕</button>
+                                </div>
+                            )}
 
                             <div className="space-y-4">
 
@@ -3097,8 +3202,8 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                         />
                                     </div>
 
-                                    {/* Suggestions */}
-                                    {propertyResults.length > 0 && (
+                                    {/* Suggestions & No Results Message */}
+                                    {propertyResults.length > 0 ? (
                                         <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                                             {propertyResults.map((property) => (
                                                 <button
@@ -3116,6 +3221,22 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                                 </button>
                                             ))}
                                         </div>
+                                    ) : (
+                                        propertySearch.trim().length >= 2 && !propertyLoading && !selectedProperty && (
+                                            <div className="absolute z-50 mt-1 w-full bg-white border border-amber-200 rounded-xl shadow-xl p-3.5 text-xs text-slate-700 bg-amber-50/70">
+                                                <div className="flex items-start gap-2.5">
+                                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <p className="font-semibold text-slate-800 leading-snug">
+                                                            No property was found matching your search <span className="font-bold text-brand">"{propertySearch}"</span>.
+                                                        </p>
+                                                        <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                                                            Please try searching using the complete property address.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
                                     )}
                                 </div>
 
@@ -3188,150 +3309,165 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     </div>
                 )}
 
-                {/* Section Sub-Header */}
-                <div className="bg-white rounded-t-lg shadow-sm p-3.5 sm:p-6 border-b">
-                    <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-800">Rental Application Form</h1>
-                            <p className="text-gray-500 text-sm mt-1">Complete all sections to submit your application</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Desktop Progress Bar - Hidden on Mobile */}
-                <div className="hidden md:block bg-white p-4 border-x">
-                    <div className="flex justify-between text-sm mb-1">
-                        <span>Step {currentStep} of 10</span>
-                        <span>{Math.round((currentStep / 10) * 100)}% Complete</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-brand rounded-full h-2 transition-all" style={{ width: `${(currentStep / 10) * 100}%` }}></div>
-                    </div>
-                    {isSaving && <p className="text-xs text-gray-400 text-right mt-1">Saving...</p>}
-                </div>
-
-                {/* Mobile Sticky Step Indicator */}
-                <div className="md:hidden sticky top-0 z-50 bg-white border-b shadow-sm">
-                    <div className="flex items-center justify-between p-3 overflow-x-auto no-scrollbar whitespace-nowrap">
-                        {steps.map((step, idx) => {
-                            const isActive = currentStep === step.number;
-                            const isPast = currentStep > step.number;
-
-                            // Only show current, previous, and next on mobile to avoid overcrowding
-                            // Or show all but with smaller circles? 
-                            // Let's show all but scrollable if many.
-                            return (
-                                <div key={step.number} className="flex items-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => goToStep(step.number)}
-                                        className="flex flex-col items-center gap-1 px-2 outline-none focus:ring-0"
-                                    >
-                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${isActive ? 'bg-brand text-white shadow-md scale-110' :
-                                            isPast ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
-                                            }`}>
-                                            {isPast ? <CheckCircle className="w-4 h-4" /> : step.number}
-                                        </div>
-                                        <span className={`text-[10px] font-medium transition-colors ${isActive ? 'text-brand' : 'text-gray-500'}`}>
-                                            {step.title.split(' ')[0]}
-                                        </span>
-                                    </button>
-                                    {idx < steps.length - 1 && (
-                                        <div className={`h-[1px] w-4 ${isPast ? 'bg-green-500' : 'bg-gray-200'}`}></div>
-                                    )}
+                {/* Main Form Content - Only shown when Property Modal is closed */}
+                {!showPropertyModal && (
+                    <>
+                        {/* Section Sub-Header */}
+                        <div className="bg-white rounded-t-lg shadow-sm p-3.5 sm:p-6 border-b">
+                            <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
+                                <div>
+                                    <h1 className="text-2xl font-bold text-gray-800">Rental Application Form</h1>
+                                    <p className="text-gray-500 text-sm mt-1">Complete all sections to submit your application</p>
                                 </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                            </div>
+                        </div>
 
-                <div className="flex flex-col md:flex-row gap-3 md:gap-6 mt-3 sm:mt-6">
-                    {/* Left Side - Steps Navigation - HIDDEN ON MOBILE */}
-                    <div className="hidden md:block md:w-80 lg:w-96 flex-shrink-0">
-                        <div className="bg-white rounded-lg shadow-sm sticky top-4">
-                            <div className="p-3">
-                                {steps.map(step => {
-                                    const Icon = step.icon;
+                        {/* Desktop Progress Bar - Hidden on Mobile */}
+                        <div className="hidden md:block bg-white p-4 border-x">
+                            <div className="flex justify-between text-sm mb-1">
+                                <span>Step {currentStep} of 10</span>
+                                <span>{Math.round((currentStep / 10) * 100)}% Complete</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div className="bg-brand rounded-full h-2 transition-all" style={{ width: `${(currentStep / 10) * 100}%` }}></div>
+                            </div>
+                            {isSaving && <p className="text-xs text-gray-400 text-right mt-1">Saving...</p>}
+                        </div>
+
+                        {/* Mobile Sticky Step Indicator */}
+                        <div className="md:hidden sticky top-0 z-50 bg-white border-b shadow-sm">
+                            <div className="flex items-center justify-between p-3 overflow-x-auto no-scrollbar whitespace-nowrap">
+                                {steps.map((step, idx) => {
                                     const isActive = currentStep === step.number;
                                     const isPast = currentStep > step.number;
 
                                     return (
-                                        <button
-                                            key={step.number}
-                                            onClick={() => goToStep(step.number)}
-                                            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all mb-1 ${isActive ? 'bg-brand-light border-l-4 border-brand' : 'hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isPast ? 'bg-green-500 text-white' :
-                                                isActive ? 'bg-brand text-white' :
-                                                    'bg-gray-200 text-gray-600'
-                                                }`}>
-                                                {isPast ? <CheckCircle className="w-5 h-5" /> : step.number}
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <div className={`text-sm font-medium ${isActive ? 'text-brand' : 'text-gray-700'}`}>
-                                                    Step {step.number}: {step.title}
+                                        <div key={step.number} ref={isActive ? activeStepRef : null} className="flex items-center shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => goToStep(step.number)}
+                                                className="flex flex-col items-center gap-1 px-2 outline-none focus:ring-0"
+                                            >
+                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${isActive ? 'bg-brand text-white shadow-md scale-110' :
+                                                    isPast ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                                                    }`}>
+                                                    {isPast ? <CheckCircle className="w-4 h-4" /> : step.number}
                                                 </div>
-                                                {!step.required && <span className="text-xs text-gray-400">Optional</span>}
-                                            </div>
-                                            {isPast && <CheckCircle className="w-4 h-4 text-green-500" />}
-                                        </button>
+                                                <span className={`text-[10px] font-medium transition-colors ${isActive ? 'text-brand' : 'text-gray-500'}`}>
+                                                    {step.title.split(' ')[0]}
+                                                </span>
+                                            </button>
+                                            {idx < steps.length - 1 && (
+                                                <div className={`h-[1px] w-4 ${isPast ? 'bg-green-500' : 'bg-gray-200'}`}></div>
+                                            )}
+                                        </div>
                                     );
                                 })}
                             </div>
-
                         </div>
-                    </div>
 
-                    {/* Right Side - Form Content */}
-                    <div className="flex-1">
-                        <div className="bg-white rounded-lg shadow-sm p-3.5 sm:p-6">
-                            <div className="mb-6 pb-3 border-b">
-                                <h2 className="text-xl font-semibold text-gray-800">
-                                    Step {currentStep}: {steps.find(s => s.number === currentStep)?.title}
-                                </h2>
-                            </div>
+                        <div className="flex flex-col md:flex-row gap-3 md:gap-6 mt-3 sm:mt-6">
+                            {/* Left Side - Steps Navigation - HIDDEN ON MOBILE */}
+                            <div className="hidden md:block md:w-80 lg:w-96 flex-shrink-0">
+                                <div className="bg-white rounded-lg shadow-sm sticky top-4">
+                                    <div className="p-3">
+                                        {steps.map(step => {
+                                            const Icon = step.icon;
+                                            const isActive = currentStep === step.number;
+                                            const isPast = currentStep > step.number;
 
-                            {errorMessage && (
-                                <div className="mb-6 p-4 rounded-md bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
-                                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                                    <div className="whitespace-pre-line text-sm">{errorMessage}</div>
+                                            return (
+                                                <button
+                                                    key={step.number}
+                                                    onClick={() => goToStep(step.number)}
+                                                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all mb-1 ${isActive ? 'bg-brand-light border-l-4 border-brand' : 'hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isPast ? 'bg-green-500 text-white' :
+                                                        isActive ? 'bg-brand text-white' :
+                                                            'bg-gray-200 text-gray-600'
+                                                        }`}>
+                                                        {isPast ? <CheckCircle className="w-5 h-5" /> : step.number}
+                                                    </div>
+
+                                                    <div className="text-left flex-1">
+                                                        <p className={`font-medium text-sm ${isActive ? 'text-brand font-semibold' : 'text-gray-700'
+                                                            }`}>
+                                                            {step.title}
+                                                        </p>
+                                                        <p className="text-xs text-gray-400">{step.subtitle}</p>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            )}
+                            </div>
 
-                            {renderStepContent()}
+                            {/* Right Side - Step Content */}
+                            <div className="flex-1">
+                                <div className="bg-white rounded-lg shadow-sm p-3.5 sm:p-6">
+                                    {/* Success Message */}
+                                    {successMessage && (
+                                        <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 text-sm font-medium rounded shadow-sm flex items-center justify-between">
+                                            <span>{successMessage}</span>
+                                            <button onClick={() => setSuccessMessage('')} className="text-green-700 hover:text-green-900 font-bold ml-2">✕</button>
+                                        </div>
+                                    )}
 
-                            <div className="flex justify-between mt-8 pt-4 border-t">
-                                <button
-                                    type="button"
-                                    onClick={prevStep}
-                                    className={`px-6 py-2 rounded-md ${currentStep === 1 ? 'invisible' : 'bg-gray-200 hover:bg-gray-300'}`}
-                                >
-                                    ← Previous
-                                </button>
-                                {currentStep < 10 ? (
-                                    <button
-                                        type="button"
-                                        onClick={nextStep}
-                                        disabled={isSaving}
-                                        className="bg-brand text-white px-6 py-2 rounded-md hover:bg-brand-dark disabled:opacity-50"
-                                    >
-                                        {isSaving ? 'Saving...' : 'Next Step →'}
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={finalSubmit}
-                                        disabled={processing}
-                                        className="bg-green-600 text-white px-8 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
-                                    >
-                                        {processing ? 'Submitting...' : 'Submit Application'}
-                                    </button>
-                                )}
+                                    {/* Error Message Alert Banner */}
+                                    {errorMessage && (
+                                        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-medium rounded shadow-sm flex items-center justify-between">
+                                            <span>{errorMessage}</span>
+                                            <button onClick={() => setErrorMessage('')} className="text-red-700 hover:text-red-900 font-bold ml-2">✕</button>
+                                        </div>
+                                    )}
+
+                                    {renderStepContent()}
+
+                                    {/* Navigation Buttons */}
+                                    <div className="flex justify-between items-center mt-8 pt-4 border-t">
+                                        <button
+                                            type="button"
+                                            onClick={prevStep}
+                                            disabled={currentStep === 1}
+                                            className="px-6 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                                        >
+                                            ← Previous
+                                        </button>
+
+                                        {currentStep < 10 ? (
+                                            <button
+                                                type="button"
+                                                onClick={nextStep}
+                                                disabled={isSaving || processing}
+                                                className="bg-brand text-white px-6 py-2 rounded-md hover:bg-brand-dark flex items-center gap-2 text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {isSaving ? (
+                                                    <>
+                                                        <RefreshCw className="w-4 h-4 animate-spin" />
+                                                        <span>Saving...</span>
+                                                    </>
+                                                ) : (
+                                                    <span>Next Step →</span>
+                                                )}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={finalSubmit}
+                                                disabled={processing}
+                                                className="bg-green-600 text-white px-8 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
+                                            >
+                                                {processing ? 'Submitting...' : 'Submit Application'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
+                    </>
+                )}
             </div>
         </div>
     );

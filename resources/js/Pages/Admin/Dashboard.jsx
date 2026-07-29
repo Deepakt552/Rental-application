@@ -96,7 +96,7 @@ export default function Dashboard({ applicants, stats, chartData, recentPayments
     return (
         <AuthenticatedLayout>
             <div className="py-8 bg-gradient-to-br from-[#f8fafc] to-[#f1f5f9] dark:from-slate-900 dark:to-slate-800 min-h-screen transition-colors duration-300">
-                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="w-full px-4 sm:px-6 lg:px-8">
                     
                     {/* Header */}
                     <motion.div
@@ -387,9 +387,14 @@ export default function Dashboard({ applicants, stats, chartData, recentPayments
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                                                    <Calendar className="w-3.5 h-3.5 opacity-70" />
-                                                    <span className="text-[12px] font-medium">{new Date(applicant.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                <div className="flex flex-col text-slate-600 dark:text-slate-300">
+                                                    <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+                                                        <Calendar className="w-3.5 h-3.5 opacity-70" />
+                                                        <span className="text-[12px] font-semibold">{new Date(applicant.created_at).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono pl-5">
+                                                        {new Date(applicant.created_at).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: true })}
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right">

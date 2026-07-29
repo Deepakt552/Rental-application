@@ -162,64 +162,82 @@ class ApplicationController extends Controller
             'desired_move_date' => 'nullable|date',
         ]);
 
-        // Check duplicate email
-        $existingApplicant = Applicant::where('email', $request->email)
-            ->where('status', '!=', 'draft')
-            ->first();
+        try {
+            DB::beginTransaction();
 
-        if ($existingApplicant) {
-            return response()->json([
-                'success' => false,
-                'message' => 'An application with this email has already been submitted. Please use a different email address.'
-            ], 422);
-        }
+            // Check submitted (non-draft) application
+            $existingSubmitted = Applicant::where('email', $request->email)
+                ->where('status', '!=', 'draft')
+                ->first();
 
-        // If a draft already exists, reuse it
-        $draft = Applicant::where('email', $request->email)
-            ->where('status', 'draft')
-            ->first();
-
-        if ($draft) {
-            $user = Auth::user();
-            if ($draft->user_id !== null && (!$user || $draft->user_id !== $user->id) && !($user && ($user->isAdmin() || $user->isSuperAdmin()))) {
+            if ($existingSubmitted) {
+                DB::rollBack();
                 return response()->json([
                     'success' => false,
-                    'message' => 'An application with this email already exists.'
+                    'message' => 'An application with this email has already been submitted. Please log in using your credentials to view your application.'
                 ], 422);
             }
-            session(['current_applicant_id' => $draft->id]);
+
+            // Check if a draft already exists for this email
+            $draft = Applicant::where('email', $request->email)
+                ->where('status', 'draft')
+                ->latest()
+                ->first();
+
+            if ($draft) {
+                $user = Auth::user();
+                $existingUser = User::where('email', $request->email)->first();
+                if ($existingUser && !$user) {
+                    if (!$draft->user_id) {
+                        $draft->user_id = $existingUser->id;
+                        $draft->save();
+                    }
+                }
+                session(['current_applicant_id' => $draft->id]);
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'applicant_id' => $draft->id,
+                    'session_id' => $draft->session_id,
+                    'current_step' => $draft->current_step ?? 1,
+                    'is_existing_draft' => true
+                ]);
+            }
+
+            // Create new applicant draft
+            $user = Auth::user();
+            $applicant = Applicant::create([
+                'email' => $request->email,
+                'user_id' => $user ? $user->id : null,
+                'session_id' => (string) Str::uuid(),
+                'current_step' => 1,
+                'status' => 'draft',
+                'type' => $request->type ?? 'admin',
+                'company_name' => $request->company_name,
+                'property_id' => $request->property_id,
+                'property_name' => $request->property_name,
+                'property_type' => $request->property_type,
+                'desired_move_date' => $request->desired_move_date,
+            ]);
+
+            session(['current_applicant_id' => $applicant->id]);
+            DB::commit();
+
             return response()->json([
                 'success' => true,
-                'applicant_id' => $draft->id,
-                'session_id' => $draft->session_id,
-                'current_step' => $draft->current_step ?? 1
+                'applicant_id' => $applicant->id,
+                'session_id' => $applicant->session_id,
+                'current_step' => $applicant->current_step ?? 1
             ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('initApplication Exception: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to initialize application: ' . $e->getMessage()
+            ], 500);
         }
-
-        // Create new applicant
-        $applicant = Applicant::create([
-            'email' => $request->email,
-            'session_id' => (string) Str::uuid(),
-            'current_step' => 1,
-            'status' => 'draft',
-            'type' => $request->type ?? 'admin',
-
-
-            'company_name' => $request->company_name,
-            'property_id' => $request->property_id,
-            'property_name' => $request->property_name,
-            'property_type' => $request->property_type,
-            'desired_move_date' => $request->desired_move_date,
-        ]);
-
-        session(['current_applicant_id' => $applicant->id]);
-
-        return response()->json([
-            'success' => true,
-            'applicant_id' => $applicant->id,
-            'session_id' => $applicant->session_id,
-            'current_step' => $applicant->current_step ?? 1
-        ]);
     }
 
     /**
@@ -263,7 +281,7 @@ class ApplicationController extends Controller
             'password' => Auth::check() ? 'nullable' : 'required|string|min:8|confirmed',
             'additional_persons.*.date_of_birth' => 'nullable|date|before:today|after_or_equal:-100 years',
         ], [
-            'email.unique' => 'This email is already associated with another application. Please use a different email or use the "Resume" feature to continue your existing application.',
+            'email.unique' => 'This email is already associated with another application.',
             'password.required' => 'A password is required to save your progress and allow you to resume later.'
         ]);
 
@@ -284,19 +302,21 @@ class ApplicationController extends Controller
                 $existingUser = User::where('email', $request->email)->first();
 
                 if ($existingUser) {
-                    // If user exists, verify password and log them in
-                    if (Hash::check($request->password, $existingUser->password)) {
+                    // Check if applicant already belongs to existing user or password matches
+                    if ($applicant->user_id === $existingUser->id || ($request->password && Hash::check($request->password, $existingUser->password)) || strtolower($applicant->email) === strtolower($request->email)) {
                         Auth::login($existingUser);
                         $userId = $existingUser->id;
                     } else {
+                        DB::rollBack();
                         return response()->json([
                             'success' => false,
-                            'errors' => ['password' => ['This email is already registered. Please enter the correct password or log in first.']]
+                            'message' => 'An account with this email already exists. Please log in using your account credentials to continue.',
+                            'errors' => ['email' => ['An account with this email already exists. Please log in using your account credentials.']]
                         ], 422);
                     }
                 } else {
                     $user = User::create([
-                        'name' => $request->first_name . ' ' . $request->last_name,
+                        'name' => trim($request->first_name . ' ' . $request->last_name),
                         'email' => $request->email,
                         'password' => Hash::make($request->password),
                         'role' => 'user'
@@ -306,14 +326,14 @@ class ApplicationController extends Controller
                 }
             }
 
-            // Update applicant with user_id
+            // Update applicant with user_id & current_step
             $updateData = [
                 'email' => $request->email,
                 'current_step' => 2
             ];
             $currentAuthUser = Auth::user();
             $isAdminUser = $currentAuthUser && ($currentAuthUser->isAdmin() || $currentAuthUser->isSuperAdmin());
-            if (!$applicant->user_id && !$isAdminUser) {
+            if (!$applicant->user_id && !$isAdminUser && $userId) {
                 $updateData['user_id'] = $userId;
             }
             $applicant->update($updateData);
@@ -357,12 +377,16 @@ class ApplicationController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Step 1 saved and account created successfully',
+                'applicant_id' => $applicant->id,
                 'current_step' => 2
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Step 1 save error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            Log::error('Step 1 save exception: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error saving Step 1 details: ' . $e->getMessage()
+            ], 500);
         }
     }
 

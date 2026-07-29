@@ -111,7 +111,7 @@ export default function Applications({ applicants, filters, total_admin, total_s
     return (
         <AuthenticatedLayout>
             <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-                <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-7">
+                <div className="w-full px-4 sm:px-6 lg:px-8 py-7">
 
                     {/* ── Header ── */}
                     <div className="flex items-start justify-between mb-7">
@@ -380,9 +380,14 @@ export default function Applications({ applicants, filters, total_admin, total_s
 
                                                 {/* Date */}
                                                 <td className="px-4 py-3.5">
-                                                    <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                                                        {new Date(a.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                    </span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                                                            {new Date(a.created_at).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: '2-digit', year: 'numeric' })}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap font-mono mt-0.5">
+                                                            {new Date(a.created_at).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: true })}
+                                                        </span>
+                                                    </div>
                                                 </td>
 
                                                 {/* Actions */}

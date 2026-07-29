@@ -597,7 +597,7 @@ export default function AuthenticatedLayout({ header, children }) {
             <div className={`transition-all duration-300 ease-in-out ${isTenant ? 'md:pl-0' : (isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64')}`}>
 
                 {/* Top Navigation Bar */}
-                <nav className={`fixed top-0 right-0 z-30 transition-all duration-300
+                <nav className={`fixed top-0 right-0 z-[100] transition-all duration-300
                     ${isTenant ? 'left-0' : (isSidebarCollapsed ? 'md:left-20' : 'md:left-64')} left-0
                     bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 shadow-sm`}>
                     <div className="mx-auto px-4 sm:px-6 lg:px-8">
@@ -653,69 +653,92 @@ export default function AuthenticatedLayout({ header, children }) {
                             {/* Right-side actions */}
                             <div className="flex items-center space-x-1 sm:space-x-2 ml-auto">
 
-                                {/* Theme Toggle — desktop only for non-tenants, always for tenants */}
-                                <button
-                                    onClick={toggleTheme}
-                                    title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                                    className="p-2 rounded-xl text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all duration-200"
-                                >
-                                    {theme === 'dark' ? (
-                                        <Sun className="h-[18px] w-[18px]" />
-                                    ) : (
-                                        <Moon className="h-[18px] w-[18px]" />
-                                    )}
-                                </button>
+                                {/* Theme Toggle — Admin only */}
+                                {!isTenant && (
+                                    <button
+                                        onClick={toggleTheme}
+                                        title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                                        className="p-2 rounded-xl text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all duration-200"
+                                    >
+                                        {theme === 'dark' ? (
+                                            <Sun className="h-[18px] w-[18px]" />
+                                        ) : (
+                                            <Moon className="h-[18px] w-[18px]" />
+                                        )}
+                                    </button>
+                                )}
 
-                                {/* Notification Bell */}
-                                <button className="relative p-2 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#0e4a81] dark:hover:text-[#5a9bd5] hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all duration-200">
-                                    <Bell className="h-[18px] w-[18px]" />
-                                    <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-slate-900"></span>
-                                </button>
+                                {/* Notification Bell — Admin only */}
+                                {!isTenant && (
+                                    <button className="relative p-2 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#0e4a81] dark:hover:text-[#5a9bd5] hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all duration-200">
+                                        <Bell className="h-[18px] w-[18px]" />
+                                        <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-slate-900"></span>
+                                    </button>
+                                )}
 
-                                {/* User Dropdown */}
+                                {/* User Profile Dropdown */}
                                 <Dropdown>
                                     <Dropdown.Trigger>
-                                        <button className="group flex items-center space-x-2 focus:outline-none p-1 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                                        <button className="group flex items-center space-x-2.5 focus:outline-none p-1.5 sm:pr-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 hover:border-[#0e4a81]/40 dark:hover:border-blue-500/40 bg-white/70 dark:bg-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 shadow-sm">
                                             <div className="relative">
-                                                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#0e4a81] to-[#1a5c9e] text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
+                                                <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-[#0e4a81] via-[#15599b] to-[#2563eb] text-white flex items-center justify-center font-black text-xs shadow-md shadow-[#0e4a81]/25 ring-2 ring-white dark:ring-slate-900">
                                                     {user.name?.charAt(0).toUpperCase()}
                                                 </div>
-                                                <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-green-500 rounded-full ring-2 ring-white dark:ring-slate-900"></div>
+                                                <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-slate-900"></div>
                                             </div>
                                             <div className="hidden sm:block text-left">
-                                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-[#0e4a81] dark:group-hover:text-[#5a9bd5] transition-colors leading-tight">
+                                                <p className="text-xs font-extrabold text-slate-800 dark:text-slate-100 group-hover:text-[#0e4a81] dark:group-hover:text-blue-400 transition-colors leading-tight">
                                                     {user.name}
                                                 </p>
-                                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-                                                    {isTenant ? 'Applicant' : 'Administrator'}
+                                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
+                                                    {isTenant ? 'Applicant Portal' : 'Administrator'}
                                                 </p>
                                             </div>
-                                            <ChevronDown className="hidden sm:block h-3.5 w-3.5 text-slate-400 dark:text-slate-500 group-hover:text-[#0e4a81] dark:group-hover:text-[#5a9bd5] transition-colors" />
+                                            <ChevronDown className="hidden sm:block h-3.5 w-3.5 text-slate-400 dark:text-slate-500 group-hover:text-[#0e4a81] dark:group-hover:text-blue-400 transition-colors" />
                                         </button>
                                     </Dropdown.Trigger>
 
-                                    <Dropdown.Content contentClasses="mt-2 w-56 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-                                        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{user.name}</p>
-                                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">{user.email}</p>
-                                            <div className="mt-2 flex items-center space-x-1.5">
-                                                <div className="h-1.5 w-1.5 bg-green-500 rounded-full"></div>
-                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">Active</span>
+                                    <Dropdown.Content width="64" align="right" contentClasses="w-full rounded-2xl shadow-2xl shadow-slate-900/15 border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/80">
+                                        {/* User Header Info Card */}
+                                        <div className="p-4 bg-slate-50/80 dark:bg-slate-800/60">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-[#0e4a81] to-[#2563eb] text-white flex items-center justify-center font-black text-sm shadow-md">
+                                                    {user.name?.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-xs font-black text-slate-800 dark:text-white truncate">{user.name}</p>
+                                                    <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5 font-medium">{user.email}</p>
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                                                    <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                                    Active Session
+                                                </span>
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                                    {isTenant ? 'Tenant' : 'Admin'}
+                                                </span>
                                             </div>
                                         </div>
-                                        <Dropdown.Link
-                                            href={route('profile.edit')}
-                                            className="flex items-center space-x-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all"
-                                        >
-                                            <User className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                                            <span>Profile Settings</span>
-                                        </Dropdown.Link>
-                                        <div className="border-t border-slate-100 dark:border-slate-800 pt-1 pb-1">
+
+                                        {/* Links */}
+                                        <div className="p-1.5 space-y-0.5">
+                                            <Dropdown.Link
+                                                href={route('profile.edit')}
+                                                className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-blue-50/60 dark:hover:bg-blue-950/40 hover:text-[#0e4a81] dark:hover:text-blue-400 transition-all"
+                                            >
+                                                <User className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                                                <span>Profile Settings</span>
+                                            </Dropdown.Link>
+                                        </div>
+
+                                        {/* Log Out */}
+                                        <div className="p-1.5">
                                             <Dropdown.Link
                                                 href={route('logout')}
                                                 method="post"
                                                 as="button"
-                                                className="flex items-center space-x-3 px-4 py-2.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-all w-full"
+                                                className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all w-full text-left"
                                             >
                                                 <LogOut className="h-4 w-4" />
                                                 <span>Log Out</span>
@@ -779,7 +802,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 )}
 
                 {/* Main Content */}
-                <main className={`${(isTenant || !header) ? 'pt-20' : ''} pb-12`}>
+                <main className={`${(isTenant || !header) ? 'pt-20' : ''} ${isTenant ? 'pb-2' : 'pb-8'}`}>
                     <div className="mx-auto px-4 sm:px-6 lg:px-8">
                         {children}
                     </div>

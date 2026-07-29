@@ -201,10 +201,10 @@ export default function ApplicationDetail({ applicant }) {
                                                 {applicant.status || 'Draft'}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-1 flex items-center gap-2">
+                                        <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-1 flex items-center gap-2 flex-wrap">
                                             <span>Application ID: #{applicant.id}</span>
                                             <span>•</span>
-                                            <span>Submitted: {new Date(applicant.created_at).toLocaleDateString()}</span>
+                                            <span>Created: {new Date(applicant.created_at).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: '2-digit', year: 'numeric' })} at {new Date(applicant.created_at).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                                         </p>
                                     </div>
                                 </div>
