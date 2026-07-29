@@ -7,7 +7,8 @@ import {
     IdCardLanyard, AlertCircle, ChevronDown, ChevronUp,
     Plus, Trash2, Phone, Upload, FileText, X,
     CheckCircle, Circle, Save, Table, ShieldCheck, Eye, EyeOff,
-    Building2, Search, ArrowRight, CheckCircle2, RefreshCw
+    Building2, Search, ArrowRight, CheckCircle2, RefreshCw,
+    LogIn, LayoutDashboard
 } from 'lucide-react';
 
 export default function ApplicationForm({ sessionId: propSessionId }) {
@@ -941,17 +942,19 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         }
     };
 
-    // Previous step
+    // Previous step - always allow user to go back to previous step
     const prevStep = async () => {
         setErrorMessage('');
-        if (!validateCurrentStep(currentStep)) {
-            return;
-        }
+        setErrors({});
 
         if (currentStep > 1) {
-            // Save current step before leaving (except step 1 which already saved)
-            if (currentStep !== 1) {
-                await saveCurrentStep();
+            // Save current step before leaving if applicantId exists (swallow validation errors when going back)
+            if (currentStep !== 1 && applicantId) {
+                try {
+                    await saveCurrentStep();
+                } catch (e) {
+                    console.warn('Auto-save on prevStep ignored:', e);
+                }
             }
 
             const newStep = currentStep - 1;
@@ -961,17 +964,38 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         }
     };
 
+    // Validate all steps from Step 1 up to targetStep - 1 before jumping forward
+    const validatePriorSteps = (targetStep) => {
+        for (let s = 1; s < targetStep; s++) {
+            if (!validateCurrentStep(s)) {
+                setCurrentStep(s);
+                return false;
+            }
+        }
+        return true;
+    };
+
     // Go to specific step (navigation click)
     const goToStep = async (step) => {
         if (step === currentStep) return;
         setErrorMessage('');
 
-        if (!validateCurrentStep(currentStep)) {
-            return;
+        // Only enforce validation when jumping to a FORWARD step
+        if (step > currentStep) {
+            if (!validatePriorSteps(step)) {
+                return;
+            }
+        } else {
+            // Clear current step errors when navigating backwards
+            setErrors({});
         }
 
         if (applicantId) {
-            await saveCurrentStep();
+            try {
+                await saveCurrentStep();
+            } catch (e) {
+                console.warn('Auto-save on goToStep ignored:', e);
+            }
         }
 
         setCurrentStep(step);
@@ -1634,7 +1658,25 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         {isEmailChecking && <span className="absolute right-2 top-2 text-xs text-gray-400">Checking...</span>}
                         {emailAvailable && !isEmailChecking && !errors['personal_info.email'] && <span className="absolute right-2 top-2 text-xs text-green-500 font-medium">✓ Available</span>}
                     </div>
-                    {errors['personal_info.email'] && <p className="text-red-500 text-xs mt-1">{errors['personal_info.email']}</p>}
+                    {errors['personal_info.email'] && (
+                        <div className="mt-1 text-xs text-red-500 space-y-1">
+                            <p className="font-semibold">{errors['personal_info.email']}</p>
+                            {(errors['personal_info.email'].toLowerCase().includes('exist') || errors['personal_info.email'].toLowerCase().includes('submitted') || errors['personal_info.email'].toLowerCase().includes('associated') || errors['personal_info.email'].toLowerCase().includes('draft')) && (
+                                <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+                                    <span className="text-[11px] font-semibold text-amber-900 leading-snug">
+                                        Please log in using your account credentials to continue your application.
+                                    </span>
+                                    <Link
+                                        href="/login"
+                                        className="px-3 py-1.5 bg-brand text-white text-[11px] font-bold rounded-lg hover:bg-brand-dark transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-sm"
+                                    >
+                                        <LogIn className="w-3.5 h-3.5" />
+                                        <span>Log In Now</span>
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
                 {!auth?.user && (!applicantId || errors['personal_info.password'] || errors['password'] || (formData.personal_info.password && formData.personal_info.password.length > 0 && formData.personal_info.password.length < 8)) && (
                     <>
@@ -2964,8 +3006,42 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     };
 
     const pageContent = (
-        <div className="min-h-screen bg-gray-50 py-2 sm:py-8">
+        <div className="min-h-screen bg-gray-50 pb-8">
             <Toaster position="top-right" />
+
+            {/* Top Header Bar (Only shown for guest users without AuthenticatedLayout header) */}
+            {!auth?.user && (
+                <header className="bg-white border-b border-slate-200/80 shadow-sm sticky top-0 z-40 mb-4 sm:mb-6">
+                    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden p-1 shadow-sm">
+                                <img
+                                    src={companyName === 'Excel' ? '/Excel Residential - Icon.png' : '/Triumph Logo.png'}
+                                    alt={`${companyName} Logo`}
+                                    className="w-full h-full object-contain"
+                                />
+                            </div>
+                            <div>
+                                <h1 className="text-base sm:text-xl font-black text-slate-900 leading-tight">
+                                    {companyName === 'Excel' ? 'Excel Residential Services' : 'Triumph Residential Services'}
+                                </h1>
+                                <p className="text-[11px] sm:text-xs text-slate-500 font-medium">Rental Application Portal</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <Link
+                                href="/login"
+                                className="px-3.5 sm:px-4 py-2 bg-brand text-white text-xs sm:text-sm font-bold rounded-xl hover:bg-brand-dark transition-all flex items-center gap-1.5 shadow-md shadow-brand/20"
+                            >
+                                <LogIn className="w-4 h-4" />
+                                <span>Log In</span>
+                            </Link>
+                        </div>
+                    </div>
+                </header>
+            )}
+
             <div className="max-w-6xl mx-auto px-1 sm:px-4">
                 {/* Resume Popup */}
                 {showEmailPopup && (
@@ -3086,26 +3162,39 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     Continue Application
                                     <CheckCircle2 className="w-4 h-4" />
                                 </button>
+
+                                {/* Sign In / Account Link */}
+                                <div className="pt-3 border-t border-slate-100 text-center">
+                                    <p className="text-xs text-slate-500 mb-2 font-medium">Already have an account?</p>
+                                    <Link
+                                        href={auth?.user ? (auth.user.role === 'admin' || auth.user.role === 'superadmin' ? '/admin/dashboard' : '/dashboard') : '/login'}
+                                        className="w-full py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+                                    >
+                                        {auth?.user ? (
+                                            <>
+                                                <LayoutDashboard className="w-4 h-4 text-brand" />
+                                                <span>Go to Dashboard</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <LogIn className="w-4 h-4 text-brand" />
+                                                <span>Sign In to Account</span>
+                                            </>
+                                        )}
+                                    </Link>
+                                </div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* Header */}
+                {/* Section Sub-Header */}
                 <div className="bg-white rounded-t-lg shadow-sm p-3.5 sm:p-6 border-b">
                     <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">Rental Application Form</h1>
                             <p className="text-gray-500 text-sm mt-1">Complete all sections to submit your application</p>
                         </div>
-                        {auth?.user && (auth.user.role === 'admin' || auth.user.role === 'superadmin') && applicantId && (
-                            <Link
-                                href={`/admin/applications/${applicantId}`}
-                                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm"
-                            >
-                                ← Back to Applicant Details
-                            </Link>
-                        )}
                     </div>
                 </div>
 

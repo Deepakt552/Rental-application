@@ -8,6 +8,7 @@ import Stepper from '@/Components/Consent/Stepper';
 import Step1 from '@/Components/Consent/Steps/Step1';
 import Step2 from '@/Components/Consent/Steps/Step2';
 import Step3 from '@/Components/Consent/Steps/Step3';
+import { LogIn, LayoutDashboard } from 'lucide-react';
 
 export default function ConsentForm({ sessionId, applicantId, step1Data, step2Data, step3Data, applicantType }) {
     const { auth } = usePage().props;
@@ -394,9 +395,45 @@ export default function ConsentForm({ sessionId, applicantId, step1Data, step2Da
         }
     };
 
+    const companyName = isExcel ? 'Excel' : 'Triumph';
+
     const pageContent = (
-        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-2 sm:py-12">
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 pb-8 sm:pb-12">
             <Toaster position="top-right" />
+
+            {/* Top Header Bar (Only shown for guest users without AuthenticatedLayout header) */}
+            {!auth?.user && (
+                <header className="bg-white dark:bg-slate-800 border-b border-slate-200/80 dark:border-slate-700 shadow-sm sticky top-0 z-40 mb-6">
+                    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden p-1 shadow-sm">
+                                <img
+                                    src={companyName === 'Excel' ? '/Excel Residential - Icon.png' : '/Triumph Logo.png'}
+                                    alt={`${companyName} Logo`}
+                                    className="w-full h-full object-contain"
+                                />
+                            </div>
+                            <div>
+                                <h1 className="text-base sm:text-xl font-black text-slate-900 dark:text-white leading-tight">
+                                    {companyName === 'Excel' ? 'Excel Residential Services' : 'Triumph Residential Services'}
+                                </h1>
+                                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">Consent Forms Portal</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <Link
+                                href="/login"
+                                className="px-3.5 sm:px-4 py-2 bg-brand text-white text-xs sm:text-sm font-bold rounded-xl hover:bg-brand-dark transition-all flex items-center gap-1.5 shadow-md shadow-brand/20"
+                            >
+                                <LogIn className="w-4 h-4" />
+                                <span>Log In</span>
+                            </Link>
+                        </div>
+                    </div>
+                </header>
+            )}
+
             <div className="max-w-4xl mx-auto px-1 sm:px-6 lg:px-8">
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl overflow-hidden border border-gray-100 dark:border-slate-700">
                     <div className="px-3 py-4 sm:px-6 sm:py-8">
@@ -407,14 +444,6 @@ export default function ConsentForm({ sessionId, applicantId, step1Data, step2Da
                                     Please complete the consent form to proceed with your application
                                 </p>
                             </div>
-                            {auth?.user && (auth.user.role === 'admin' || auth.user.role === 'superadmin') && applicantId && (
-                                <Link
-                                    href={`/admin/applications/${applicantId}`}
-                                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm bg-white"
-                                >
-                                    ← Back to Applicant Details
-                                </Link>
-                            )}
                         </div>
 
                         <Stepper steps={steps.map(s => s.title)} currentStep={currentStep} />

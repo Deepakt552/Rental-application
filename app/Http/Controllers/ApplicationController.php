@@ -240,7 +240,7 @@ class ApplicationController extends Controller
         return response()->json([
             'exists' => $exists,
             'has_draft' => $hasDraft,
-            'message' => $exists ? 'This email has already been submitted.' : ($hasDraft ? 'A draft already exists for this email.' : '')
+            'message' => $exists ? 'This email has already been submitted. Please log in using your credentials.' : ($hasDraft ? 'A draft already exists for this email. Please log in using your credentials to continue.' : '')
         ]);
     }
 
