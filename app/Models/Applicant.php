@@ -435,7 +435,9 @@ class Applicant extends Model
                     && !empty($data['emergency_contact']['relationship'])
                     && !empty($data['emergency_contact']['phone']);
             case 10:
-                return $this->documents()->count() >= 4;
+                $uploadedTypes = $this->documents()->pluck('document_type')->toArray();
+                $requiredTypes = ['driving_license', 'pay_check', 'bank_statement', 'social_security_card'];
+                return count(array_diff($requiredTypes, $uploadedTypes)) === 0;
             default:
                 return true;
         }

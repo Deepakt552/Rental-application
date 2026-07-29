@@ -378,25 +378,39 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 }
 
                 try {
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.content : '';
                     const response = await safeFetch(endpoint, {
                         method: 'POST',
                         headers: {
                             'Accept': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                            'X-CSRF-TOKEN': csrfToken
                         },
                         body: formDataToSend
                     });
-                    if (!response) return false;
+                    if (!response) {
+                        setErrorMessage('Network connection error while saving documents.');
+                        toast.error('Network connection error');
+                        setIsSaving(false);
+                        return false;
+                    }
                     const result = await response.json();
                     if (!response.ok) {
-                        if (response.status === 422 && result.errors) {
+                        if (result.errors) {
                             setErrors(result.errors);
+                            const errMsgs = Object.values(result.errors).flat();
+                            setErrorMessage('Error uploading documents:\n' + errMsgs.join('\n'));
+                            toast.error('Document upload failed: ' + (errMsgs[0] || 'Invalid file'));
+                        } else {
+                            const msg = result.message || 'Error saving documents.';
+                            setErrorMessage(msg);
+                            toast.error(msg);
                         }
                         setIsSaving(false);
                         return false;
                     }
                     // After a successful save, refresh uploaded documents list
-                    if (result.success && applicantId) {
+                    if (result.success && idToUse) {
                         safeFetch(`/api/application/applicant/${idToUse}`)
                             .then(r => r ? r.json() : null)
                             .then(r => {
@@ -407,9 +421,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             .catch(() => {});
                     }
                     setIsSaving(false);
-                    return result.success;
+                    return result.success !== false;
                 } catch (error) {
                     console.error('Save error:', error);
+                    setErrorMessage('Save error: ' + (error.message || 'Unknown error'));
+                    toast.error('Failed to save documents.');
                     setIsSaving(false);
                     return false;
                 }
@@ -887,8 +903,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     };
     // Final submit
     const finalSubmit = async () => {
-
-        if (!applicantId) return;
+        if (!applicantId) {
+            setErrorMessage('Application session missing. Please refresh or resume your application.');
+            toast.error('Application ID missing.');
+            return;
+        }
 
         // Clear old errors
         setErrors({});
@@ -903,7 +922,6 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         ];
 
         const missingDocs = requiredDocs.filter((id) => {
-
             // Check already-uploaded docs from server first
             const alreadyHas = uploadedDocuments.some(d => d.document_type === id);
             if (alreadyHas) return false;
@@ -921,47 +939,42 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         });
 
         if (missingDocs.length > 0) {
-
             const newErrors = {};
-
             missingDocs.forEach((id) => {
                 newErrors[`documents.${id}`] = 'Document required';
             });
-
             setErrors(newErrors);
-
             setErrorMessage(
-                'Step 10 is incomplete: Please upload all required documents.'
+                'Step 10 is incomplete: Please upload all required documents (Driver\'s License, Pay Stub, Bank Statement, and Social Security Card).'
             );
-
+            toast.error('Please upload all required documents.');
             return;
         }
 
         setProcessing(true);
 
         try {
-
             // ✅ Save Step 10 first
             const stepSaved = await saveCurrentStep();
 
             // Stop if save failed
             if (!stepSaved) {
-
                 setProcessing(false);
-
                 console.log('Step 10 save failed');
-
+                toast.error('Failed to save documents. Please check errors above.');
                 return;
             }
 
             // ✅ Final submit
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.content : '';
+
             const response = await safeFetch('/api/application/final-submit', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN':
-                        document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': csrfToken
                 },
                 body: JSON.stringify({
                     applicant_id: applicantId,
@@ -970,6 +983,8 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             });
 
             if (!response) {
+                setErrorMessage('Network connection error while submitting application.');
+                toast.error('Network error');
                 setProcessing(false);
                 return;
             }
@@ -977,83 +992,51 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             const result = await response.json();
 
             // ✅ Success
-            if (result.success) {
-
+            if (response.ok && result.success) {
                 console.log('Application Submitted');
-                console.log('Email Status:', result.email_status);
-
                 toast.success('Application submitted successfully!');
 
                 localStorage.removeItem('applicant_id');
                 localStorage.removeItem('rental_application');
 
                 setTimeout(() => {
-
-                    window.location.href =
-                        `/consent?session_id=${sessionId}`;
-
+                    window.location.href = `/consent?session_id=${sessionId}`;
                 }, 1500);
-
             } else {
-
                 // ✅ Validation errors
                 if (result.errors) {
-
                     setErrors(result.errors);
-
                     const errorMessages = Object.values(result.errors).flat();
-
-                    let msg = 'Please fix the following errors:';
+                    let msg = 'Please fix the following errors before submitting:';
 
                     if (result.step_with_error) {
-
-                        msg =
-                            `Error in Step ${result.step_with_error}: ` + msg;
-
+                        msg = `Error in Step ${result.step_with_error}: ` + msg;
                     } else if (result.first_incomplete_step) {
-
-                        msg =
-                            `Step ${result.first_incomplete_step} is incomplete: ` +
-                            msg;
+                        msg = `Step ${result.first_incomplete_step} is incomplete: ` + msg;
                     }
 
-                    setErrorMessage(
-                        msg + '\n\n' + errorMessages.join('\n')
-                    );
+                    setErrorMessage(msg + '\n\n' + errorMessages.join('\n'));
+                    toast.error('Form contains errors. Please check the highlighted steps.');
 
                     // Redirect to error step
                     if (result.step_with_error) {
-
                         setCurrentStep(result.step_with_error);
-
                         await updateStepOnly(result.step_with_error);
-
                     } else if (result.first_incomplete_step) {
-
                         setCurrentStep(result.first_incomplete_step);
-
                         await updateStepOnly(result.first_incomplete_step);
                     }
-
                 } else {
-
-                    alert(
-                        'Error submitting application: ' +
-                        (result.message || 'Unknown error')
-                    );
+                    const errorMsg = result.message || 'Unknown error';
+                    setErrorMessage('Error submitting application: ' + errorMsg);
+                    toast.error('Submit failed: ' + errorMsg);
                 }
             }
-
         } catch (error) {
-
             console.error('Submit error:', error);
-
-            alert(
-                'Error submitting application. Please try again.'
-            );
-
+            setErrorMessage('Error submitting application: ' + (error.message || 'Network error'));
+            toast.error('Error submitting application. Please try again.');
         } finally {
-
             setProcessing(false);
         }
     };
