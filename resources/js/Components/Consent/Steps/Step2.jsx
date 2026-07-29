@@ -206,7 +206,7 @@ export default function Step2({ data, onChange, onSave, errors = {}, isExcel = f
 
     return (
         <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+            <div className="bg-white p-3.5 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 border-b pb-2">APPLICANT'S CONSENT AND RELEASE FOR CRIMINAL BACKGROUND CHECK</h3>
                 <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
                     <p>
@@ -251,7 +251,7 @@ export default function Step2({ data, onChange, onSave, errors = {}, isExcel = f
                 </div>
             )}
 
-            <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <div className="bg-white p-3.5 sm:p-6 rounded-lg border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Signatures Required</h2>
                 {formData.applicants.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">

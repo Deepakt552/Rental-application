@@ -123,7 +123,7 @@ export default function RentalApplication({ company, auth }) {
         <div className="min-h-screen bg-slate-50">
             <Head title={`Rental Application - ${company}`} />
             
-            <div className="max-w-4xl mx-auto px-4 py-8">
+            <div className="max-w-4xl mx-auto px-1.5 sm:px-4 py-3 sm:py-8">
                 {/* Header */}
                 <div className="mb-8">
                     <Link 

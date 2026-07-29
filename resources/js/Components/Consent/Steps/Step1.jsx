@@ -136,7 +136,7 @@ export default function Step1({ data, onChange, onSave, errors = {}, isExcel = f
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+            <div className="bg-white p-3.5 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 border-b pb-2">APPLICANT/TENANT CONSENT</h3>
                 <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
                     <p>
@@ -162,7 +162,7 @@ export default function Step1({ data, onChange, onSave, errors = {}, isExcel = f
             </div>
 
             {/* Applicant/Tenant Section */}
-            <div className="bg-gray-50 p-6 rounded-lg">
+            <div className="bg-gray-50 p-3.5 sm:p-6 rounded-lg">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Applicant/Tenant Consent</h2>
 
                 <div className="space-y-4">
@@ -213,7 +213,7 @@ export default function Step1({ data, onChange, onSave, errors = {}, isExcel = f
             </div>
 
             {/* Co-Applicant Section */}
-            <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <div className="bg-white p-3.5 sm:p-6 rounded-lg border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     Co-Applicant / Guarantor Section
                     <span className="text-sm font-normal text-gray-500 ml-2">(Optional)</span>

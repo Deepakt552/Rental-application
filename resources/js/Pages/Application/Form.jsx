@@ -7,7 +7,7 @@ import {
     IdCardLanyard, AlertCircle, ChevronDown, ChevronUp,
     Plus, Trash2, Phone, Upload, FileText, X,
     CheckCircle, Circle, Save, Table, ShieldCheck, Eye, EyeOff,
-    Building2, Search, ArrowRight, CheckCircle2
+    Building2, Search, ArrowRight, CheckCircle2, RefreshCw
 } from 'lucide-react';
 
 export default function ApplicationForm({ sessionId: propSessionId }) {
@@ -20,6 +20,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     const [resumeLoading, setResumeLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [uploadedDocuments, setUploadedDocuments] = useState([]);
+    const [uploadingDocs, setUploadingDocs] = useState({});
     const [isEmailChecking, setIsEmailChecking] = useState(false);
     const [emailAvailable, setEmailAvailable] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -234,16 +235,156 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     // Helper for fetch with CSRF error handling
     const safeFetch = async (url, options = {}) => {
         try {
-            const response = await fetch(url, options);
+            const fetchOptions = {
+                credentials: 'same-origin',
+                ...options,
+                headers: {
+                    ...(options.headers || {})
+                }
+            };
+            const response = await fetch(url, fetchOptions);
             if (response.status === 419) {
-                // CSRF token mismatch
-                window.location.reload();
+                console.warn('CSRF session expired or token mismatch for:', url);
+                // Do not reload page on background/validation API calls as it destroys user form input!
                 return null;
             }
             return response;
         } catch (error) {
             console.error('Fetch error:', error);
             throw error;
+        }
+    };
+
+    // Compress image files client-side before uploading (60% quality = ~40%+ size reduction)
+    const compressImage = (file) => {
+        return new Promise((resolve) => {
+            if (!file || !file.type || !file.type.startsWith('image/')) {
+                return resolve(file); // Non-images (like PDF) return unchanged
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    const MAX_WIDTH = 1920;
+                    const MAX_HEIGHT = 1920;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height = Math.round((height * MAX_WIDTH) / width);
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width = Math.round((width * MAX_HEIGHT) / height);
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob) {
+                                return resolve(file);
+                            }
+                            const fileName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                            const compressedFile = new File([blob], `${fileName}.jpg`, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+                            resolve(compressedFile);
+                        },
+                        'image/jpeg',
+                        0.6
+                    );
+                };
+                img.onerror = () => resolve(file);
+                img.src = event.target.result;
+            };
+            reader.onerror = () => resolve(file);
+            reader.readAsDataURL(file);
+        });
+    };
+
+    // Direct Upload Handler: Compresses images & uploads file immediately to server on selection
+    const handleDirectFileUpload = async (docType, filesToUpload, description = '') => {
+        const idToUse = applicantId || localStorage.getItem('applicant_id');
+        if (!idToUse) {
+            toast.error('Application session missing. Please start or resume application.');
+            return;
+        }
+
+        const fileArray = Array.isArray(filesToUpload) ? filesToUpload : [filesToUpload];
+        if (fileArray.length === 0) return;
+
+        setUploadingDocs(prev => ({ ...prev, [docType]: true }));
+
+        try {
+            for (const rawFile of fileArray) {
+                // Compress image if applicable
+                const fileToUpload = await compressImage(rawFile);
+
+                const formDataToSend = new FormData();
+                formDataToSend.append('applicant_id', idToUse);
+
+                if (docType === 'pay_check' || docType === 'bank_statement') {
+                    formDataToSend.append(`documents[${docType}][]`, fileToUpload);
+                } else if (docType === 'other_source_of_income' || docType === 'other') {
+                    formDataToSend.append(`documents[${docType}][file]`, fileToUpload);
+                    formDataToSend.append(`documents[${docType}][description]`, description || '');
+                } else {
+                    formDataToSend.append(`documents[${docType}]`, fileToUpload);
+                }
+
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.content : '';
+
+                const response = await safeFetch('/api/application/step10/save', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: formDataToSend
+                });
+
+                if (!response) {
+                    toast.error(`Network error uploading ${rawFile.name}`);
+                    continue;
+                }
+
+                const result = await response.json();
+                if (!response.ok) {
+                    const msg = result.errors ? Object.values(result.errors).flat()[0] : (result.message || 'Upload failed');
+                    toast.error(`Upload error: ${msg}`);
+                    continue;
+                }
+
+                toast.success(`"${rawFile.name}" uploaded successfully!`);
+            }
+
+            // Refresh server uploaded documents list
+            const res = await safeFetch(`/api/application/applicant/${idToUse}`);
+            if (res && res.ok) {
+                const r = await res.json();
+                if (r && r.success && r.documents_list) {
+                    setUploadedDocuments(r.documents_list);
+                }
+            }
+        } catch (err) {
+            console.error('Direct upload error:', err);
+            toast.error('Failed to upload file.');
+        } finally {
+            setUploadingDocs(prev => ({ ...prev, [docType]: false }));
         }
     };
 
@@ -1086,6 +1227,9 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     const checkEmailAvailability = async (email) => {
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
 
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.content : '';
+
         setIsEmailChecking(true);
         try {
             const response = await safeFetch('/api/application/check-email', {
@@ -1093,7 +1237,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': csrfToken
                 },
                 body: JSON.stringify({ email })
             });
@@ -2645,40 +2789,47 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     )}
 
                                     {/* ── Upload button (always shown so user can add/replace) ──── */}
-                                    <label className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-50 text-slate-600 text-xs font-bold cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-all border border-slate-200 border-dashed">
-                                        <Upload className="w-3.5 h-3.5" />
-                                        <span>
-                                            {alreadyUploaded.length > 0 || isFileSelected
-                                                ? (doc.multiple ? 'Add More' : 'Replace File')
-                                                : (doc.multiple ? 'Upload Documents' : 'Upload Document')}
-                                        </span>
-                                        <input
-                                            type="file"
-                                            className="hidden"
-                                            accept=".pdf,.jpg,.jpeg,.png"
-                                            multiple={doc.multiple}
-                                            onChange={(e) => {
-                                                const files = Array.from(e.target.files);
-                                                if (files.length > 0) {
-                                                    const invalidFiles = files.filter(f => f.size > 5 * 1024 * 1024);
-                                                    if (invalidFiles.length > 0) {
-                                                        toast.error('Each file must be less than 5MB');
-                                                        return;
-                                                    }
-                                                    setErrors(prev => { const e = { ...prev }; delete e[`documents.${doc.id}`]; return e; });
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        documents: {
-                                                            ...prev.documents,
-                                                            [doc.id]: doc.multiple
-                                                                ? [...(prev.documents[doc.id] || []), ...files]
-                                                                : files[0]
-                                                        }
-                                                    }));
-                                                }
-                                            }}
-                                        />
-                                    </label>
+                                    <label className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition-all border border-dashed ${
+                                         uploadingDocs[doc.id]
+                                             ? 'bg-blue-50 text-blue-600 border-blue-300 pointer-events-none'
+                                             : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-blue-600 border-slate-200'
+                                     }`}>
+                                         {uploadingDocs[doc.id] ? (
+                                             <>
+                                                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                                 <span>Compressing & Uploading...</span>
+                                             </>
+                                         ) : (
+                                             <>
+                                                 <Upload className="w-3.5 h-3.5" />
+                                                 <span>
+                                                     {alreadyUploaded.length > 0 || isFileSelected
+                                                         ? (doc.multiple ? 'Add More' : 'Replace File')
+                                                         : (doc.multiple ? 'Upload Documents' : 'Upload Document')}
+                                                 </span>
+                                             </>
+                                         )}
+                                         <input
+                                             type="file"
+                                             className="hidden"
+                                             accept=".pdf,.jpg,.jpeg,.png"
+                                             multiple={doc.multiple}
+                                             disabled={uploadingDocs[doc.id]}
+                                             onChange={async (e) => {
+                                                 const files = Array.from(e.target.files);
+                                                 if (files.length > 0) {
+                                                     const invalidFiles = files.filter(f => f.size > 15 * 1024 * 1024);
+                                                     if (invalidFiles.length > 0) {
+                                                         toast.error('Original file size must be less than 15MB');
+                                                         return;
+                                                     }
+                                                     setErrors(prev => { const err = { ...prev }; delete err[`documents.${doc.id}`]; return err; });
+                                                     await handleDirectFileUpload(doc.id, files);
+                                                     e.target.value = '';
+                                                 }
+                                             }}
+                                         />
+                                     </label>
                                 </div>
                             </div>
                         );
@@ -2715,79 +2866,35 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             className="w-full rounded-xl border-slate-200 bg-slate-50/50 mb-4 text-sm focus:ring-blue-500 focus:border-blue-500"
                         />
                         <div className="relative">
-                            {!formData.documents.other_source_of_income.file ? (
-                                <label className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl bg-slate-50/50 border-2 border-dashed border-slate-200 text-slate-600 text-sm font-bold cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all group/drop">
-                                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400 group-hover/drop:text-blue-600 transition-colors">
-                                        <Upload className="w-5 h-5" />
-                                    </div>
-                                    <span className="mt-2 text-xs font-bold text-slate-700">Drop your file here, or <span className="text-blue-600">browse</span></span>
-                                    <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
-                                        const file = e.target.files[0];
-                                        if (file) {
-                                            if (file.size > 5 * 1024 * 1024) {
-                                                toast.error('File must be less than 5MB');
-                                                setErrors(prev => ({
-                                                    ...prev,
-                                                    'documents.other_source_of_income': 'File must be less than 5MB'
-                                                }));
-                                                return;
-                                            }
-                                            setErrors(prev => {
-                                                const newErrors = { ...prev };
-                                                delete newErrors['documents.other_source_of_income'];
-                                                return newErrors;
-                                            });
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                documents: {
-                                                    ...prev.documents,
-                                                    other_source_of_income: { ...prev.documents.other_source_of_income, file: file }
-                                                }
-                                            }));
-                                        }
-                                    }} />
-                                </label>
-                            ) : (
-                                <div className={`flex flex-col gap-1 p-4 rounded-xl bg-white border shadow-sm ${
-                                    errors['documents.other_source_of_income.file'] ? 'border-red-500 bg-red-50' : 'border-slate-100'
-                                }`}>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
-                                            {formData.documents.other_source_of_income.file.type?.startsWith('image/') ? (
-                                                <img src={URL.createObjectURL(formData.documents.other_source_of_income.file)} alt="preview" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <FileText className="w-6 h-6 text-slate-400" />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-bold text-slate-900 truncate">{formData.documents.other_source_of_income.file.name}</p>
-                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{(formData.documents.other_source_of_income.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    documents: { ...prev.documents, other_source_of_income: { ...prev.documents.other_source_of_income, file: null } }
-                                                }));
-                                                setErrors(prev => {
-                                                    const newErrors = { ...prev };
-                                                    delete newErrors['documents.other_source_of_income.file'];
-                                                    return newErrors;
-                                                });
-                                            }}
-                                            className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                    {errors['documents.other_source_of_income.file'] && (
-                                        <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">
-                                            {errors['documents.other_source_of_income.file']}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
+                            <label className={`flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed text-slate-600 text-sm font-bold cursor-pointer transition-all ${
+                                 uploadingDocs['other_source_of_income']
+                                     ? 'bg-blue-50 border-blue-300 text-blue-600 pointer-events-none'
+                                     : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-blue-300'
+                             }`}>
+                                 <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400">
+                                     {uploadingDocs['other_source_of_income'] ? (
+                                         <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                                     ) : (
+                                         <Upload className="w-5 h-5" />
+                                     )}
+                                 </div>
+                                 <span className="mt-2 text-xs font-bold text-slate-700">
+                                     {uploadingDocs['other_source_of_income']
+                                         ? 'Compressing & Uploading file...'
+                                         : <>Drop your file here, or <span className="text-blue-600">browse</span></>}
+                                 </span>
+                                 <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" disabled={uploadingDocs['other_source_of_income']} onChange={async (e) => {
+                                     const file = e.target.files[0];
+                                     if (file) {
+                                         if (file.size > 15 * 1024 * 1024) {
+                                             toast.error('File size must be under 15MB');
+                                             return;
+                                         }
+                                         await handleDirectFileUpload('other_source_of_income', file, formData.documents.other_source_of_income.description);
+                                         e.target.value = '';
+                                     }
+                                 }} />
+                             </label>
                             {errors['documents.other_source_of_income'] && <p className="text-red-500 text-[10px] mt-1 font-bold uppercase tracking-tight">{errors['documents.other_source_of_income']}</p>}
                         </div>
                     </div>
@@ -2814,75 +2921,39 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             className="w-full rounded-xl border-slate-200 bg-slate-50/50 mb-4 text-sm focus:ring-blue-500 focus:border-blue-500"
                         />
                         <div className="relative">
-                            {!formData.documents.other.file ? (
-                                <label className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl bg-slate-50/50 border-2 border-dashed border-slate-200 text-slate-600 text-sm font-bold cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all group/drop">
-                                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400 group-hover/drop:text-blue-600 transition-colors">
-                                        <Upload className="w-5 h-5" />
-                                    </div>
-                                    <span className="mt-2 text-xs font-bold text-slate-700">Drop your file here, or <span className="text-blue-600">browse</span></span>
-                                    <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
-                                        const file = e.target.files[0];
-                                        if (file) {
-                                            if (file.size > 5 * 1024 * 1024) {
-                                                toast.error('File must be less than 5MB');
-                                                setErrors(prev => ({
-                                                    ...prev,
-                                                    'documents.other': 'File must be less than 5MB'
-                                                }));
-                                                return;
-                                            }
-                                            setErrors(prev => {
-                                                const newErrors = { ...prev };
-                                                delete newErrors['documents.other'];
-                                                return newErrors;
-                                            });
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                documents: { ...prev.documents, other: { ...prev.documents.other, file: file } }
-                                            }));
-                                        }
-                                    }} />
-                                </label>
-                            ) : (
-                                <div className={`flex flex-col gap-1 p-4 rounded-xl bg-white border shadow-sm ${
-                                    errors['documents.other.file'] ? 'border-red-500 bg-red-50' : 'border-slate-100'
-                                }`}>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 flex-shrink-0 overflow-hidden">
-                                            {formData.documents.other.file.type?.startsWith('image/') ? (
-                                                <img src={URL.createObjectURL(formData.documents.other.file)} alt="preview" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <FileText className="w-6 h-6 text-slate-400" />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-bold text-slate-900 truncate">{formData.documents.other.file.name}</p>
-                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{(formData.documents.other.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    documents: { ...prev.documents, other: { ...prev.documents.other, file: null } }
-                                                }));
-                                                setErrors(prev => {
-                                                    const newErrors = { ...prev };
-                                                    delete newErrors['documents.other.file'];
-                                                    return newErrors;
-                                                });
-                                            }}
-                                            className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                    {errors['documents.other.file'] && (
-                                        <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">
-                                            {errors['documents.other.file']}
-                                        </p>
-                                    )}
-                                </div>
+                            <label className={`flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed text-slate-600 text-sm font-bold cursor-pointer transition-all ${
+                                 uploadingDocs['other']
+                                     ? 'bg-blue-50 border-blue-300 text-blue-600 pointer-events-none'
+                                     : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-blue-300'
+                             }`}>
+                                 <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400">
+                                     {uploadingDocs['other'] ? (
+                                         <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                                     ) : (
+                                         <Upload className="w-5 h-5" />
+                                     )}
+                                 </div>
+                                 <span className="mt-2 text-xs font-bold text-slate-700">
+                                     {uploadingDocs['other']
+                                         ? 'Compressing & Uploading file...'
+                                         : <>Drop your file here, or <span className="text-blue-600">browse</span></>}
+                                 </span>
+                                 <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" disabled={uploadingDocs['other']} onChange={async (e) => {
+                                     const file = e.target.files[0];
+                                     if (file) {
+                                         if (file.size > 15 * 1024 * 1024) {
+                                             toast.error('File size must be under 15MB');
+                                             return;
+                                         }
+                                         await handleDirectFileUpload('other', file, formData.documents.other.description);
+                                         e.target.value = '';
+                                     }
+                                 }} />
+                             </label>
+                            {errors['documents.other.file'] && (
+                                <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">
+                                    {errors['documents.other.file']}
+                                </p>
                             )}
                             {errors['documents.other'] && <p className="text-red-500 text-[10px] mt-1 font-bold uppercase tracking-tight">{errors['documents.other']}</p>}
                         </div>
@@ -2893,9 +2964,9 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     };
 
     const pageContent = (
-        <div className="min-h-screen bg-gray-50 py-8">
+        <div className="min-h-screen bg-gray-50 py-2 sm:py-8">
             <Toaster position="top-right" />
-            <div className="max-w-6xl mx-auto px-4">
+            <div className="max-w-6xl mx-auto px-1 sm:px-4">
                 {/* Resume Popup */}
                 {showEmailPopup && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -3021,7 +3092,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 )}
 
                 {/* Header */}
-                <div className="bg-white rounded-t-lg shadow-sm p-6 border-b">
+                <div className="bg-white rounded-t-lg shadow-sm p-3.5 sm:p-6 border-b">
                     <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">Rental Application Form</h1>
@@ -3085,7 +3156,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-6 mt-6">
+                <div className="flex flex-col md:flex-row gap-3 md:gap-6 mt-3 sm:mt-6">
                     {/* Left Side - Steps Navigation - HIDDEN ON MOBILE */}
                     <div className="hidden md:block md:w-80 lg:w-96 flex-shrink-0">
                         <div className="bg-white rounded-lg shadow-sm sticky top-4">
@@ -3125,7 +3196,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
                     {/* Right Side - Form Content */}
                     <div className="flex-1">
-                        <div className="bg-white rounded-lg shadow-sm p-6">
+                        <div className="bg-white rounded-lg shadow-sm p-3.5 sm:p-6">
                             <div className="mb-6 pb-3 border-b">
                                 <h2 className="text-xl font-semibold text-gray-800">
                                     Step {currentStep}: {steps.find(s => s.number === currentStep)?.title}

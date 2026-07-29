@@ -9,7 +9,7 @@ window.axios.interceptors.response.use(
     response => response,
     error => {
         if (error.response && error.response.status === 419) {
-            window.location.reload();
+            console.warn('CSRF token mismatch or session expired (419)');
         }
         return Promise.reject(error);
     }

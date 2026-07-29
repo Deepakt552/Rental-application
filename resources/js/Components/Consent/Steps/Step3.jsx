@@ -333,7 +333,7 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
     return (
         <div className="space-y-8">
             {/* Header Info */}
-            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+            <div className="bg-white p-3.5 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 border-b pb-2">INFORMATION TO APPLICANTS FOR AFFORDABLE RENTAL HOUSING </h3>
                 <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
                     <p>
@@ -355,7 +355,7 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
             </div>
 
             {/* Head of Household */}
-            <div className="bg-gray-50 p-6 rounded-lg">
+            <div className="bg-gray-50 p-3.5 sm:p-6 rounded-lg">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">1. Head of Household <span className="text-red-500">*</span></h2>
 
                 <div className="space-y-4">
@@ -408,7 +408,7 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
             </div>
 
             {/* Co-Head (Optional) */}
-            <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <div className="bg-white p-3.5 sm:p-6 rounded-lg border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     2. Co-Head
                     <span className="text-sm font-normal text-gray-500 ml-2">(Optional)</span>
@@ -464,7 +464,7 @@ export default function Step3({ data, onChange, sessionId, errors = {} }) {
             </div>
 
             {/* Adult Members */}
-            <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <div className="bg-white p-3.5 sm:p-6 rounded-lg border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">3. Adult Members (18 years or older)</h2>
 
                 {formData.adult_members.length === 0 ? (
