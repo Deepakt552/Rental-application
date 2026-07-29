@@ -296,121 +296,116 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 break;
             case 10:
                 endpoint = '/api/application/step10/save';
-                // For files, use FormData
-                const formDataToSend = new FormData();
-                formDataToSend.append('applicant_id', idToUse);
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.content : '';
 
-                // Append files
-                // if (formData.documents.driving_license) formDataToSend.append('documents[driving_license]', formData.documents.driving_license);
-                // if (formData.documents.pay_check) formDataToSend.append('documents[pay_check]', formData.documents.pay_check);
-                // if (formData.documents.bank_statement) formDataToSend.append('documents[bank_statement]', formData.documents.bank_statement);
-                // if (formData.documents.social_security_card) formDataToSend.append('documents[social_security_card]', formData.documents.social_security_card);
-                // if (formData.documents.other_source_of_income.file) {
-                //     formDataToSend.append('documents[other_source_of_income][file]', formData.documents.other_source_of_income.file);
-                //     formDataToSend.append('documents[other_source_of_income][description]', formData.documents.other_source_of_income.description || '');
-                // }
-                // if (formData.documents.other.file) {
-                //     formDataToSend.append('documents[other][file]', formData.documents.other.file);
-                //     formDataToSend.append('documents[other][description]', formData.documents.other.description || '');
-                // }
+                // Build individual file payloads to prevent POST payload size limits
+                const filePayloads = [];
 
                 if (formData.documents.driving_license) {
-                    formDataToSend.append(
-                        'documents[driving_license]',
-                        formData.documents.driving_license
-                    );
+                    const fd = new FormData();
+                    fd.append('applicant_id', idToUse);
+                    fd.append('documents[driving_license]', formData.documents.driving_license);
+                    filePayloads.push(fd);
                 }
 
-                // Pay Check (multiple)
-                if (
-                    formData.documents.pay_check &&
-                    formData.documents.pay_check.length > 0
-                ) {
+                if (formData.documents.pay_check && formData.documents.pay_check.length > 0) {
                     formData.documents.pay_check.forEach((file) => {
-                        formDataToSend.append('documents[pay_check][]', file);
+                        const fd = new FormData();
+                        fd.append('applicant_id', idToUse);
+                        fd.append('documents[pay_check][]', file);
+                        filePayloads.push(fd);
                     });
                 }
 
-                // Bank Statement (multiple)
-                if (
-                    formData.documents.bank_statement &&
-                    formData.documents.bank_statement.length > 0
-                ) {
+                if (formData.documents.bank_statement && formData.documents.bank_statement.length > 0) {
                     formData.documents.bank_statement.forEach((file) => {
-                        formDataToSend.append('documents[bank_statement][]', file);
+                        const fd = new FormData();
+                        fd.append('applicant_id', idToUse);
+                        fd.append('documents[bank_statement][]', file);
+                        filePayloads.push(fd);
                     });
                 }
 
-                // SSN Card (single)
                 if (formData.documents.social_security_card) {
-                    formDataToSend.append(
-                        'documents[social_security_card]',
-                        formData.documents.social_security_card
-                    );
+                    const fd = new FormData();
+                    fd.append('applicant_id', idToUse);
+                    fd.append('documents[social_security_card]', formData.documents.social_security_card);
+                    filePayloads.push(fd);
                 }
 
-                // Other Source of Income
                 if (formData.documents.other_source_of_income.file) {
-
-                    formDataToSend.append(
-                        'documents[other_source_of_income][file]',
-                        formData.documents.other_source_of_income.file
-                    );
-
-                    formDataToSend.append(
-                        'documents[other_source_of_income][description]',
-                        formData.documents.other_source_of_income.description || ''
-                    );
+                    const fd = new FormData();
+                    fd.append('applicant_id', idToUse);
+                    fd.append('documents[other_source_of_income][file]', formData.documents.other_source_of_income.file);
+                    fd.append('documents[other_source_of_income][description]', formData.documents.other_source_of_income.description || '');
+                    filePayloads.push(fd);
                 }
 
-                // Other Documents
                 if (formData.documents.other.file) {
+                    const fd = new FormData();
+                    fd.append('applicant_id', idToUse);
+                    fd.append('documents[other][file]', formData.documents.other.file);
+                    fd.append('documents[other][description]', formData.documents.other.description || '');
+                    filePayloads.push(fd);
+                }
 
-                    formDataToSend.append(
-                        'documents[other][file]',
-                        formData.documents.other.file
-                    );
-
-                    formDataToSend.append(
-                        'documents[other][description]',
-                        formData.documents.other.description || ''
-                    );
+                // If no new files selected, send standard payload to ensure current_step is updated
+                if (filePayloads.length === 0) {
+                    const fd = new FormData();
+                    fd.append('applicant_id', idToUse);
+                    filePayloads.push(fd);
                 }
 
                 try {
-                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                    const csrfToken = csrfMeta ? csrfMeta.content : '';
-                    const response = await safeFetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken
-                        },
-                        body: formDataToSend
-                    });
-                    if (!response) {
-                        setErrorMessage('Network connection error while saving documents.');
-                        toast.error('Network connection error');
-                        setIsSaving(false);
-                        return false;
-                    }
-                    const result = await response.json();
-                    if (!response.ok) {
-                        if (result.errors) {
-                            setErrors(result.errors);
-                            const errMsgs = Object.values(result.errors).flat();
-                            setErrorMessage('Error uploading documents:\n' + errMsgs.join('\n'));
-                            toast.error('Document upload failed: ' + (errMsgs[0] || 'Invalid file'));
-                        } else {
-                            const msg = result.message || 'Error saving documents.';
-                            setErrorMessage(msg);
-                            toast.error(msg);
+                    let overallSuccess = true;
+                    for (const fdToSend of filePayloads) {
+                        const response = await safeFetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': csrfToken
+                            },
+                            body: fdToSend
+                        });
+                        if (!response) {
+                            setErrorMessage('Network connection error while saving documents.');
+                            toast.error('Network connection error');
+                            setIsSaving(false);
+                            return false;
                         }
-                        setIsSaving(false);
-                        return false;
+                        const result = await response.json();
+                        if (!response.ok) {
+                            if (result.errors) {
+                                setErrors(result.errors);
+                                const errMsgs = Object.values(result.errors).flat();
+                                setErrorMessage('Error uploading documents:\n' + errMsgs.join('\n'));
+                                toast.error('Document upload failed: ' + (errMsgs[0] || 'Invalid file'));
+                            } else {
+                                const msg = result.message || 'Error saving documents.';
+                                setErrorMessage(msg);
+                                toast.error(msg);
+                            }
+                            overallSuccess = false;
+                            break;
+                        }
                     }
-                    // After a successful save, refresh uploaded documents list
-                    if (result.success && idToUse) {
+
+                    if (overallSuccess && idToUse) {
+                        // Reset newly staged files so re-submitting won't re-upload already saved files
+                        setFormData(prev => ({
+                            ...prev,
+                            documents: {
+                                driving_license: null,
+                                pay_check: [],
+                                bank_statement: [],
+                                social_security_card: null,
+                                other_source_of_income: { file: null, description: '' },
+                                other: { file: null, description: '' }
+                            }
+                        }));
+
+                        // Refresh server list of uploaded documents
                         safeFetch(`/api/application/applicant/${idToUse}`)
                             .then(r => r ? r.json() : null)
                             .then(r => {
@@ -420,8 +415,9 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             })
                             .catch(() => {});
                     }
+
                     setIsSaving(false);
-                    return result.success !== false;
+                    return overallSuccess;
                 } catch (error) {
                     console.error('Save error:', error);
                     setErrorMessage('Save error: ' + (error.message || 'Unknown error'));
