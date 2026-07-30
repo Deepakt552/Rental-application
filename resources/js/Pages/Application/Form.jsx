@@ -256,6 +256,27 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         return () => clearInterval(heartbeat);
     }, []);
 
+    // Auto-fill logged-in user details when opening application form
+    useEffect(() => {
+        if (auth && auth.user) {
+            setFormData(prev => {
+                if (prev.personal_info.email) return prev;
+                const nameParts = (auth.user.name || '').trim().split(' ');
+                const firstName = nameParts[0] || '';
+                const lastName = nameParts.slice(1).join(' ') || '';
+                return {
+                    ...prev,
+                    personal_info: {
+                        ...prev.personal_info,
+                        email: auth.user.email || '',
+                        first_name: prev.personal_info.first_name || firstName,
+                        last_name: prev.personal_info.last_name || lastName,
+                    }
+                };
+            });
+        }
+    }, [auth]);
+
     // Helper for fetch with CSRF error handling
     const safeFetch = async (url, options = {}) => {
         try {

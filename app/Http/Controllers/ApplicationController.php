@@ -294,50 +294,7 @@ class ApplicationController extends Controller
         try {
             DB::beginTransaction();
 
-            // Create or Update User if not logged in
-            $currentUser = Auth::user();
-            $userId = $currentUser ? $currentUser->id : null;
-            if (!$userId) {
-                // Check if user already exists with this email
-                $existingUser = User::where('email', $request->email)->first();
-
-                if ($existingUser) {
-                    // Check if applicant already belongs to existing user or password matches
-                    if ($applicant->user_id === $existingUser->id || ($request->password && Hash::check($request->password, $existingUser->password)) || strtolower($applicant->email) === strtolower($request->email)) {
-                        Auth::login($existingUser);
-                        $userId = $existingUser->id;
-                    } else {
-                        DB::rollBack();
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'An account with this email already exists. Please log in using your account credentials to continue.',
-                            'errors' => ['email' => ['An account with this email already exists. Please log in using your account credentials.']]
-                        ], 422);
-                    }
-                } else {
-                    $user = User::create([
-                        'name' => trim($request->first_name . ' ' . $request->last_name),
-                        'email' => $request->email,
-                        'password' => Hash::make($request->password),
-                        'role' => 'user'
-                    ]);
-                    $userId = $user->id;
-                    Auth::login($user);
-                }
-            }
-
-            // Update applicant with user_id & current_step
-            $updateData = [
-                'email' => $request->email,
-                'current_step' => 2
-            ];
-            $currentAuthUser = Auth::user();
-            $isAdminUser = $currentAuthUser && ($currentAuthUser->isAdmin() || $currentAuthUser->isSuperAdmin());
-            if (!$applicant->user_id && !$isAdminUser && $userId) {
-                $updateData['user_id'] = $userId;
-            }
-            $applicant->update($updateData);
-
+            // 1. Save Personal Information data first to guarantee form data persistence
             PersonalInformation::updateOrCreate(
                 ['applicant_id' => $request->applicant_id],
                 [
@@ -349,11 +306,11 @@ class ApplicationController extends Controller
                     'marital_status' => $request->marital_status,
                     'date_of_birth' => $request->date_of_birth,
                     'phone' => $request->phone,
-                    'email' => $request->email
+                    'email' => strtolower(trim($request->email))
                 ]
             );
 
-            // Save additional persons (household members)
+            // 2. Save additional persons (household members)
             if ($request->has('additional_persons') && is_array($request->additional_persons)) {
                 HouseholdMember::where('applicant_id', $request->applicant_id)->delete();
                 foreach ($request->additional_persons as $person) {
@@ -372,6 +329,44 @@ class ApplicationController extends Controller
                     }
                 }
             }
+
+            // 3. Create or authenticate User account ONLY AFTER form data is saved successfully
+            $currentUser = Auth::user();
+            $userId = $currentUser ? $currentUser->id : null;
+
+            if (!$userId) {
+                $existingUser = User::where('email', strtolower(trim($request->email)))->first();
+
+                if ($existingUser) {
+                    Auth::login($existingUser);
+                    $userId = $existingUser->id;
+                    if ($request->password && Hash::needsRehash($existingUser->password)) {
+                        $existingUser->update(['password' => Hash::make($request->password)]);
+                    }
+                } else {
+                    $user = User::create([
+                        'name' => trim($request->first_name . ' ' . $request->last_name),
+                        'email' => strtolower(trim($request->email)),
+                        'password' => Hash::make($request->password ?? Str::random(12)),
+                        'role' => 'user'
+                    ]);
+                    $userId = $user->id;
+                    Auth::login($user);
+                }
+            }
+
+            // 4. Update applicant record with user_id & step
+            $updateData = [
+                'email' => strtolower(trim($request->email)),
+                'current_step' => 2
+            ];
+
+            $currentAuthUser = Auth::user();
+            $isAdminUser = $currentAuthUser && ($currentAuthUser->isAdmin() || $currentAuthUser->isSuperAdmin());
+            if (!$applicant->user_id && !$isAdminUser && $userId) {
+                $updateData['user_id'] = $userId;
+            }
+            $applicant->update($updateData);
 
             DB::commit();
             return response()->json([

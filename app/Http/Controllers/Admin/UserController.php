@@ -215,6 +215,12 @@ class UserController extends Controller
             return back()->with('error', 'You cannot delete your own account.');
         }
 
+        // Delete associated applicant records cleanly first
+        $applicants = \App\Models\Applicant::where('user_id', $user->id)->get();
+        foreach ($applicants as $applicant) {
+            $applicant->delete();
+        }
+
         $user->delete();
 
         return redirect()->route('admin.users.index')

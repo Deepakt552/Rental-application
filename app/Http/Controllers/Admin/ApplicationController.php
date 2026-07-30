@@ -276,7 +276,18 @@ class ApplicationController extends Controller
     public function destroy($id)
     {
         $applicant = Applicant::findOrFail($id);
+        $userId = $applicant->user_id;
+
+        // Delete application records & files
         $applicant->delete();
+
+        // Safely delete associated tenant user account if exists
+        if ($userId) {
+            $associatedUser = \App\Models\User::find($userId);
+            if ($associatedUser && !in_array($associatedUser->role, ['admin', 'superadmin'])) {
+                $associatedUser->delete();
+            }
+        }
 
         return redirect()->back()->with('success', 'Application deleted successfully');
     }
