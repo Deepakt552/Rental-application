@@ -190,6 +190,8 @@ class ApplicationController extends Controller
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
                 $q->where('email', 'like', "%{$search}%")
+                    ->orWhere('property_name', 'like', "%{$search}%")
+                    ->orWhere('property_id', 'like', "%{$search}%")
                     ->orWhereHas('personalInformation', function ($q2) use ($search) {
                         $q2->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
@@ -308,7 +310,7 @@ class ApplicationController extends Controller
 
     public function export(Request $request)
     {
-        $query = Applicant::with(['personalInformation', 'currentAddress', 'consentRecord']);
+        $query = Applicant::with(['personalInformation', 'currentAddress', 'consentRecord', 'property']);
 
         if ($request->has('type') && in_array($request->get('type'), ['admin', 'superadmin'])) {
             $query->where('type', $request->get('type'));
@@ -318,6 +320,8 @@ class ApplicationController extends Controller
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
                 $q->where('email', 'like', "%{$search}%")
+                    ->orWhere('property_name', 'like', "%{$search}%")
+                    ->orWhere('property_id', 'like', "%{$search}%")
                     ->orWhereHas('personalInformation', function ($q2) use ($search) {
                         $q2->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
@@ -350,7 +354,7 @@ class ApplicationController extends Controller
             "Expires"             => "0"
         ];
 
-        $columns = ['ID', 'Type', 'Name', 'Email', 'Phone', 'Status', 'Consent Status', 'Payment Status', 'Created At'];
+        $columns = ['ID', 'Type', 'Property Name', 'Property Code', 'Name', 'Email', 'Phone', 'Status', 'Consent Status', 'Payment Status', 'Created At'];
 
         $callback = function() use($applicants, $columns) {
             $file = fopen('php://output', 'w');
@@ -359,6 +363,8 @@ class ApplicationController extends Controller
             foreach ($applicants as $app) {
                 $row['ID'] = $app->id;
                 $row['Type'] = $app->type === 'admin' ? 'Triumph' : ($app->type === 'superadmin' ? 'Excel' : 'User');
+                $row['Property Name'] = $app->property_name ?: ($app->property?->property_name ?? 'N/A');
+                $row['Property Code'] = $app->property_id ? (string)$app->property_id : 'N/A';
                 $row['Name'] = $app->personalInformation ? $app->personalInformation->first_name . ' ' . $app->personalInformation->last_name : 'N/A';
                 $row['Email'] = $app->email ?? 'N/A';
                 $row['Phone'] = $app->personalInformation ? $app->personalInformation->phone : 'N/A';
@@ -367,7 +373,19 @@ class ApplicationController extends Controller
                 $row['Payment Status'] = $app->payment_status;
                 $row['Created At'] = $app->created_at->format('Y-m-d H:i:s');
 
-                fputcsv($file, array($row['ID'], $row['Type'], $row['Name'], $row['Email'], $row['Phone'], $row['Status'], $row['Consent Status'], $row['Payment Status'], $row['Created At']));
+                fputcsv($file, array(
+                    $row['ID'],
+                    $row['Type'],
+                    $row['Property Name'],
+                    $row['Property Code'],
+                    $row['Name'],
+                    $row['Email'],
+                    $row['Phone'],
+                    $row['Status'],
+                    $row['Consent Status'],
+                    $row['Payment Status'],
+                    $row['Created At']
+                ));
             }
 
             fclose($file);
