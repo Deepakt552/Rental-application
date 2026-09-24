@@ -195,6 +195,17 @@
                 </td>
             </tr>
         </table>
+
+        @if(!empty($applicant->source))
+        <table class="row-table">
+            <tr>
+                <td class="label-cell">Source:</td>
+                <td class="value-cell">
+                    {!! displayVal($applicant->source === 'Other' && !empty($applicant->source_other) ? 'Other: ' . $applicant->source_other : $applicant->source) !!}
+                </td>
+            </tr>
+        </table>
+        @endif
         <!-- 1. PERSONAL INFORMATION -->
         <div class="section-header">1. Personal Information</div>
         @php $personal = $applicant->personalInformation; @endphp

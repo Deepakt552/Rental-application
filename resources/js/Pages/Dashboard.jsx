@@ -32,11 +32,31 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
         post(route('payment.checkout', { applicant: applicant.id }));
     };
 
-    const isComplete = applicant?.current_step >= 11;
+    const isComplete = applicant?.status === 'submitted' || applicant?.status === 'approved' || (applicant?.current_step && applicant.current_step >= 11);
     const isPaid = applicant?.payment_status === 'paid';
 
-    // Calculate progress percentage
-    const progress = applicant ? Math.min(100, Math.round(((applicant.current_step - 1) / 10) * 100)) : 0;
+    // Calculate normalized step (max 10) & progress percentage
+    const stepNumber = Math.min(applicant?.current_step || 1, 10);
+    const progress = applicant ? (isComplete ? 100 : Math.min(100, Math.round(((stepNumber - 1) / 10) * 100))) : 0;
+
+    const formatLastActivity = (dateVal, humanVal) => {
+        if (!dateVal && !humanVal) return 'Recent';
+        if (dateVal) {
+            const d = new Date(dateVal);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleDateString('en-US', {
+                    timeZone: 'America/Los_Angeles',
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+            }
+            if (typeof dateVal === 'string' && dateVal.includes('ago')) {
+                return dateVal;
+            }
+        }
+        return humanVal || 'Recent';
+    };
 
     return (
         <AuthenticatedLayout user={auth.user}>
@@ -133,7 +153,7 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                     </div>
                                     <p className="text-xs font-medium text-slate-600 dark:text-slate-300 leading-normal">
                                         {!isComplete
-                                            ? `You are currently at Step ${applicant.current_step} of 10. Click the button to continue your form without losing any details.`
+                                            ? `You are currently at Step ${stepNumber} of 10. Click the button to continue your form without losing any details.`
                                             : (!applicant.is_consent_completed
                                                 ? 'Your application details are saved. Please sign your background screening consent form to proceed.'
                                                 : 'Application form & consent signed! Pay your screening fee to send your file to review.')}
@@ -182,7 +202,7 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                 {applicant?.status || 'No Active Form'}
                             </h3>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-                                {applicant ? `Step ${applicant.current_step || 1} of 10` : 'Click below to begin'}
+                                {applicant ? (isComplete ? 'Step 10 of 10' : `Step ${stepNumber} of 10`) : 'Click below to begin'}
                             </p>
                         </div>
 
@@ -227,10 +247,12 @@ export default function Dashboard({ auth, applicant, notifications, paymentSetti
                                 </div>
                             </div>
                             <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight truncate">
-                                {applicant?.updated_at ? new Date(applicant.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent'}
+                                {formatLastActivity(applicant?.updated_at, applicant?.updated_at_human)}
                             </h3>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-                                System Auto-saved
+                                {applicant?.updated_at_human && !applicant?.updated_at?.includes?.('ago')
+                                    ? `System Auto-saved (${applicant.updated_at_human})`
+                                    : 'System Auto-saved'}
                             </p>
                         </div>
                     </div>

@@ -292,6 +292,16 @@
                             </span>
                         </td>
                     </tr>
+                    @if(!empty($applicant->source))
+                    <tr>
+                        <td class="col-50" colspan="3" style="padding-top: 6px;">
+                            <span class="label-text">Source</span>
+                            <span class="value-text">
+                                {!! displayVal($applicant->source === 'Other' && !empty($applicant->source_other) ? 'Other: ' . $applicant->source_other : $applicant->source) !!}
+                            </span>
+                        </td>
+                    </tr>
+                    @endif
                 </table>
             </div>
         </div>

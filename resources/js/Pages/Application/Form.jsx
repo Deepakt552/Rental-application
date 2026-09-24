@@ -11,6 +11,18 @@ import {
     LogIn, LayoutDashboard
 } from 'lucide-react';
 
+const LEAD_SOURCES = [
+    'Craigslist',
+    'Facebook Marketplace',
+    'Zillow',
+    'AffordableHousing.com',
+    'Social Media',
+    'TurboTenant',
+    'Website',
+    'Banner',
+    'Other'
+];
+
 export default function ApplicationForm({ sessionId: propSessionId }) {
     const { type, auth, initialApplicantId, initialStep } = usePage().props;
     const [currentStep, setCurrentStep] = useState(1);
@@ -29,6 +41,8 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     // Property Modal states
     const [showPropertyModal, setShowPropertyModal] = useState(false);
     const [desiredMoveDate, setDesiredMoveDate] = useState('');
+    const [source, setSource] = useState('');
+    const [sourceOther, setSourceOther] = useState('');
     const [companyName, setCompanyName] = useState(type === 'superadmin' ? 'Excel' : 'Triumph');
     const [applyingProperty, setApplyingProperty] = useState('');
     const [propertySearch, setPropertySearch] = useState('');
@@ -53,8 +67,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         if (savedApplication) {
             try {
                 const parsed = JSON.parse(savedApplication);
+                if (parsed.source) setSource(parsed.source);
+                if (parsed.source_other) setSourceOther(parsed.source_other);
                 const pageCompany = type === 'superadmin' ? 'Excel' : 'Triumph';
-                if (parsed.company_name === pageCompany && parsed.property_id && parsed.desired_move_date) {
+                const hasValidSource = parsed.source && (parsed.source !== 'Other' || (parsed.source_other && parsed.source_other.trim()));
+                if (parsed.company_name === pageCompany && parsed.property_id && parsed.desired_move_date && hasValidSource) {
                     setShowPropertyModal(false);
                     return;
                 }
@@ -102,6 +119,8 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         if (!selectedProperty) missing.push('Property Name');
         if (!selectedPropertyType) missing.push('Property Type');
         if (!desiredMoveDate) missing.push('Desired Move Date');
+        if (!source) missing.push('Source');
+        if (source === 'Other' && !sourceOther.trim()) missing.push('Where did you hear about us');
 
         if (missing.length > 0) {
             setPropertyModalError(`Please complete required fields: ${missing.join(', ')}.`);
@@ -114,7 +133,9 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             property_id: selectedProperty.id,
             property_name: selectedProperty.property_name,
             property_type: selectedPropertyType,
-            desired_move_date: desiredMoveDate
+            desired_move_date: desiredMoveDate,
+            source: source,
+            source_other: source === 'Other' ? sourceOther.trim() : null
         };
 
         localStorage.setItem('rental_application', JSON.stringify(applicationData));
@@ -734,6 +755,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     property_type: rentalApplication?.property_type || null,
                     desired_move_date:
                         rentalApplication?.desired_move_date || null,
+                    source:
+                        rentalApplication?.source || source || null,
+                    source_other:
+                        rentalApplication?.source_other || sourceOther || null,
                 })
             });
 
@@ -1119,6 +1144,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 if (fd.vehicles && fd.vehicles.length > 0) setVehicles(fd.vehicles);
                 if (fd.emergency_contact) setFormData(prev => ({ ...prev, emergency_contact: fd.emergency_contact }));
                 if (fd.additional_persons && fd.additional_persons.length > 0) setAdditionalPersons(fd.additional_persons);
+
+                const restoredSource = result.source || fd.source;
+                const restoredSourceOther = result.source_other || fd.source_other;
+                if (restoredSource) setSource(restoredSource);
+                if (restoredSourceOther) setSourceOther(restoredSourceOther);
 
                 setShowEmailPopup(false);
                 setErrorMessage(`Welcome back! You were on Step ${result.current_step}`);
@@ -3295,6 +3325,46 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                         className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
                                     />
                                 </div>
+
+                                {/* Source */}
+                                <div>
+                                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">
+                                        Source <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={source}
+                                        onChange={(e) => {
+                                            setSource(e.target.value);
+                                            if (e.target.value !== 'Other') {
+                                                setSourceOther('');
+                                            }
+                                        }}
+                                        className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                    >
+                                        <option value="">Select where you heard about us</option>
+                                        {LEAD_SOURCES.map((src, index) => (
+                                            <option key={index} value={src}>
+                                                {src}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Other Source Input */}
+                                {source === 'Other' && (
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">
+                                            Where did you hear about us? <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={sourceOther}
+                                            onChange={(e) => setSourceOther(e.target.value)}
+                                            placeholder="Please specify where you heard about us..."
+                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                        />
+                                    </div>
+                                )}
 
                                 {/* Submit */}
                                 <button

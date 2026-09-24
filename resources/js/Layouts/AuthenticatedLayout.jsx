@@ -618,13 +618,8 @@ export default function AuthenticatedLayout({ header, children }) {
                             {/* Mobile Brand / Tenant Brand */}
                             <div className={`flex items-center ${isTenant ? '' : 'md:hidden'} flex-shrink-0`}>
                                 <Link href="/">
-                                    <div className="flex items-center space-x-3">
-                                        <BrandIcon className="h-9 w-auto" />
-                                        {isTenant && (
-                                            <span className="text-sm font-bold bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] bg-clip-text text-transparent">
-                                                {portalName}
-                                            </span>
-                                        )}
+                                    <div className="flex items-center">
+                                        <BrandIcon className={isTenant ? "h-11 sm:h-12 w-auto" : "h-9 w-auto"} />
                                     </div>
                                 </Link>
                             </div>

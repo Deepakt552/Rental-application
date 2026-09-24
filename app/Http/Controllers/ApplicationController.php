@@ -160,6 +160,8 @@ class ApplicationController extends Controller
             'property_name' => 'nullable|string',
             'property_type' => 'nullable|string',
             'desired_move_date' => 'nullable|date',
+            'source' => 'nullable|string',
+            'source_other' => 'nullable|string',
         ]);
 
         try {
@@ -190,9 +192,13 @@ class ApplicationController extends Controller
                 if ($existingUser && !$user) {
                     if (!$draft->user_id) {
                         $draft->user_id = $existingUser->id;
-                        $draft->save();
                     }
                 }
+                if ($request->filled('source') && !$draft->source) {
+                    $draft->source = $request->source;
+                    $draft->source_other = $request->source_other;
+                }
+                $draft->save();
                 session(['current_applicant_id' => $draft->id]);
                 DB::commit();
 
@@ -219,6 +225,8 @@ class ApplicationController extends Controller
                 'property_name' => $request->property_name,
                 'property_type' => $request->property_type,
                 'desired_move_date' => $request->desired_move_date,
+                'source' => $request->source,
+                'source_other' => $request->source_other,
             ]);
 
             session(['current_applicant_id' => $applicant->id]);
@@ -977,6 +985,8 @@ class ApplicationController extends Controller
                     'applicant_id'   => $applicant->id,
                     'session_id'     => $applicant->session_id,
                     'current_step'   => $applicant->current_step ?? 1,
+                    'source'         => $applicant->source,
+                    'source_other'   => $applicant->source_other,
                     'form_data'      => $fullData,
                     'documents_list' => $documentsList
                 ]);
@@ -1034,6 +1044,8 @@ class ApplicationController extends Controller
                     'applicant_id'   => $applicant->id,
                     'session_id'     => $applicant->session_id,
                     'current_step'   => $applicant->current_step ?? 1,
+                    'source'         => $applicant->source,
+                    'source_other'   => $applicant->source_other,
                     'form_data'      => $fullData,
                     'documents_list' => $documentsList
                 ]);

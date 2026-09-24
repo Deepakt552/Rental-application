@@ -159,7 +159,8 @@ Route::get('/dashboard', function () {
                 'status' => $applicant->status,
                 'payment_status' => $applicant->payment_status,
                 'is_consent_completed' => $isConsentCompleted,
-                'updated_at' => $applicant->updated_at->diffForHumans(),
+                'updated_at' => $applicant->updated_at ? $applicant->updated_at->toISOString() : null,
+                'updated_at_human' => $applicant->updated_at ? $applicant->updated_at->diffForHumans() : null,
                 'email_logs' => $applicant->emailLogs,
                 'documents' => $applicant->documents->map(fn($doc) => [
                     'id' => $doc->id,

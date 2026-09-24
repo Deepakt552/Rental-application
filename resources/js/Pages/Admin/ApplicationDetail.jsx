@@ -340,6 +340,13 @@ export default function ApplicationDetail({ applicant }) {
                                     { label: 'Property Name', value: applicant.property_name, icon: Home },
                                     { label: 'Property Type', value: applicant.property_type, icon: Info },
                                     { label: 'Desired Move Date', value: applicant.desired_move_date ? new Date(applicant.desired_move_date).toLocaleDateString() : null, icon: Calendar },
+                                    {
+                                        label: 'Source',
+                                        value: applicant.source === 'Other' && applicant.source_other
+                                            ? `Other: ${applicant.source_other}`
+                                            : applicant.source,
+                                        icon: Globe
+                                    },
                                 ]} />
                             </div>
                         )}

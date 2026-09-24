@@ -87,12 +87,14 @@ class Applicant extends Model
         'user_id',
         'payment_status',
 
-           // Property Fields
+    // Property Fields
     'company_name',
     'property_id',
     'property_name',
     'property_type',
     'desired_move_date',
+    'source',
+    'source_other',
 
     // Reminder & Comment Fields
     'admin_comment',
@@ -206,6 +208,13 @@ class Applicant extends Model
             'session_id' => $this->session_id,
             'current_step' => $this->current_step ?? 1,
             'status' => $this->status,
+            'company_name' => $this->company_name,
+            'property_id' => $this->property_id,
+            'property_name' => $this->property_name,
+            'property_type' => $this->property_type,
+            'desired_move_date' => $this->desired_move_date,
+            'source' => $this->source,
+            'source_other' => $this->source_other,
 
             // Step 1: Personal Info
             'personal_info' => $this->personalInformation ? $this->personalInformation->toArray() : [
