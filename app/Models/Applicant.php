@@ -90,16 +90,19 @@ class Applicant extends Model
     // Property Fields
     'company_name',
     'property_id',
+    'property_code',
     'property_name',
     'property_type',
     'desired_move_date',
     'source',
     'source_other',
 
+
     // Reminder & Comment Fields
     'admin_comment',
     'reminder_sent_count',
-    'last_reminder_sent_at'
+    'last_reminder_sent_at',
+    'move_in_status'
     ];
 
     public function personalInformation(): HasOne

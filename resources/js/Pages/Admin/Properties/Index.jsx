@@ -114,6 +114,7 @@ export default function Index({ properties, users, stats, filters = {} }) {
 
     const COLS = [
         { label: 'ID', col: 'id', w: 60 },
+        { label: 'Code', col: 'property_code', w: 90 },
         { label: 'Property', col: 'property_name', w: 200 },
         { label: 'Company', col: 'company_name', w: 120 },
         { label: 'Type', col: null, w: 200 },
@@ -124,6 +125,7 @@ export default function Index({ properties, users, stats, filters = {} }) {
 
         { label: '', col: null, w: 80 },
     ];
+
 
     return (
         <AuthenticatedLayout>
@@ -161,24 +163,34 @@ export default function Index({ properties, users, stats, filters = {} }) {
                     </div>
 
                     {/* ── Stats ── */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        {[
-                            { label: 'Total Properties', value: propertyStats.total, sub: 'All listings', icon: Building, accent: '#0e4a81', light: '#e6eef7' },
-                            { label: 'Excel Properties', value: propertyStats.excel, sub: 'Excel company', icon: Crown, accent: '#7c3aed', light: '#ede9fe' },
-                            { label: 'Triumph Properties', value: propertyStats.triumph, sub: 'Triumph company', icon: Building2, accent: '#059669', light: '#d1fae5' },
-                        ].map(({ label, value, sub, icon: Icon, accent, light }) => (
-                            <div key={label} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-5 py-4 flex items-center gap-4 hover:shadow-md dark:hover:shadow-slate-900/50 transition-all">
-                                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: light }}>
-                                    <Icon className="w-5 h-5" style={{ color: accent }} />
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-[22px] font-bold text-slate-800 dark:text-slate-100 leading-none">{(value || 0).toLocaleString()}</p>
-                                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 truncate">{label}</p>
-                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>
-                                </div>
+                    {(() => {
+                        const propStatsCards = [
+                            { label: companyFilter === 'Excel' ? 'Excel Properties' : (companyFilter === 'Triumph' ? 'Triumph Properties' : 'Total Properties'), value: propertyStats.total, sub: 'Filtered listings', icon: Building, accent: '#0e4a81', light: '#e6eef7' },
+                            ...(companyFilter !== 'Triumph' ? [
+                                { label: 'Excel Properties', value: propertyStats.excel, sub: 'Excel company', icon: Crown, accent: '#7c3aed', light: '#ede9fe' }
+                            ] : []),
+                            ...(companyFilter !== 'Excel' ? [
+                                { label: 'Triumph Properties', value: propertyStats.triumph, sub: 'Triumph company', icon: Building2, accent: '#059669', light: '#d1fae5' }
+                            ] : []),
+                        ];
+
+                        return (
+                            <div className={`grid gap-4 mb-6 ${propStatsCards.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'}`}>
+                                {propStatsCards.map(({ label, value, sub, icon: Icon, accent, light }) => (
+                                    <div key={label} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-5 py-4 flex items-center gap-4 hover:shadow-md dark:hover:shadow-slate-900/50 transition-all">
+                                        <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: light }}>
+                                            <Icon className="w-5 h-5" style={{ color: accent }} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[22px] font-bold text-slate-800 dark:text-slate-100 leading-none">{(value || 0).toLocaleString()}</p>
+                                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 truncate">{label}</p>
+                                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        );
+                    })()}
 
                     {/* ── Filter card ── */}
                     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm mb-5 overflow-hidden">
@@ -275,6 +287,14 @@ export default function Index({ properties, users, stats, filters = {} }) {
                                                 <td className="px-4 py-3.5">
                                                     <span className="text-[11px] font-mono font-semibold text-slate-400 dark:text-slate-500">#{property.id}</span>
                                                 </td>
+
+                                                {/* Property Code */}
+                                                <td className="px-4 py-3.5">
+                                                    <span className="text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded-md">
+                                                        {property.property_code || '—'}
+                                                    </span>
+                                                </td>
+
 
                                                 {/* Property */}
                                                 <td className="px-4 py-3.5">

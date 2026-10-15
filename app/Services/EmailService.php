@@ -136,17 +136,20 @@ class EmailService
             $tempImagePdfs = [];
 
             foreach ($documents as $doc) {
-                $filePath = storage_path('app/public/' . $doc->file_path);
-                if (file_exists($filePath)) {
-                    $mime = strtolower($doc->mime_type);
-                    $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+                $decryptedContent = $doc->getDecryptedContent();
+                if ($decryptedContent !== null) {
+                    $mime = strtolower($doc->mime_type ?? '');
+                    $ext = strtolower(pathinfo($doc->original_filename ?: $doc->file_path, PATHINFO_EXTENSION));
 
                     try {
                         if (str_contains($mime, 'pdf') || $ext === 'pdf') {
-                            $merger->addFile($filePath);
-                        } elseif (in_array($ext, ['jpg', 'jpeg', 'png']) || str_contains($mime, 'image')) {
-                            $imgData = base64_encode(file_get_contents($filePath));
-                            $src = 'data:' . $mime . ';base64,' . $imgData;
+                            $tempDocPdf = storage_path('app/temp_doc_' . uniqid() . '.pdf');
+                            file_put_contents($tempDocPdf, $decryptedContent);
+                            $merger->addFile($tempDocPdf);
+                            $tempImagePdfs[] = $tempDocPdf;
+                        } elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'webp']) || str_contains($mime, 'image')) {
+                            $imgData = base64_encode($decryptedContent);
+                            $src = 'data:' . ($mime ?: 'image/jpeg') . ';base64,' . $imgData;
                             $html = '<div style="text-align: center; margin-top: 20px;"><h3 style="font-family: sans-serif;">Document: ' . htmlspecialchars($doc->original_filename) . '</h3><img src="' . $src . '" style="max-width: 100%; max-height: 900px;" /></div>';
 
                             $tempPdfPath = storage_path('app/temp_img_' . uniqid() . '.pdf');

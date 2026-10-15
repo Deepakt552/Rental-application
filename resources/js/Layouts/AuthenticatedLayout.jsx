@@ -151,9 +151,10 @@ export default function AuthenticatedLayout({ header, children }) {
                         {
                             name: 'Triumph',
                             type: 'admin',
-                            href: route('admin.applications.index', { type: 'admin' }),
-                            active: route().current('admin.applications.index') &&
-                                new URLSearchParams(window.location.search).get('type') === 'admin',
+                            href: '/admin/applications?type=admin',
+                            active: (route().current('admin.applications.index') &&
+                                new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('type') === 'admin') ||
+                                (route().current('admin.applications.show') && applicant?.type === 'admin'),
                             count: totalAdminCount,
                             icon: BarChart3,
                             description: 'Admin Applications',
@@ -162,9 +163,10 @@ export default function AuthenticatedLayout({ header, children }) {
                         {
                             name: 'Excel',
                             type: 'superadmin',
-                            href: route('admin.applications.index', { type: 'superadmin' }),
-                            active: route().current('admin.applications.index') &&
-                                new URLSearchParams(window.location.search).get('type') === 'superadmin',
+                            href: '/admin/applications?type=superadmin',
+                            active: (route().current('admin.applications.index') &&
+                                new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('type') === 'superadmin') ||
+                                (route().current('admin.applications.show') && applicant?.type === 'superadmin'),
                             count: totalSuperAdminCount,
                             icon: Users,
                             description: 'Super Admin Applications',
@@ -597,7 +599,7 @@ export default function AuthenticatedLayout({ header, children }) {
             <div className={`transition-all duration-300 ease-in-out ${isTenant ? 'md:pl-0' : (isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64')}`}>
 
                 {/* Top Navigation Bar */}
-                <nav className={`fixed top-0 right-0 z-[100] transition-all duration-300
+                <nav className={`fixed top-0 right-0 z-30 transition-all duration-300
                     ${isTenant ? 'left-0' : (isSidebarCollapsed ? 'md:left-20' : 'md:left-64')} left-0
                     bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 shadow-sm`}>
                     <div className="mx-auto px-4 sm:px-6 lg:px-8">

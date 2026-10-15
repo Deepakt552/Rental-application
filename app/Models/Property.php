@@ -8,6 +8,7 @@ class Property extends Model
 {
     protected $fillable = [
         'property_name',
+        'property_code',
         'company_name',
         'property_type',
         'address',
@@ -15,6 +16,7 @@ class Property extends Model
         'app_notification_recipients',
         'reminder_notification_recipients',
     ];
+
 
     protected $casts = [
         'property_type' => 'array',

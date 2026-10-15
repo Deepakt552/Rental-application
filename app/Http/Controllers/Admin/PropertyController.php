@@ -79,6 +79,7 @@ class PropertyController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'property_name' => 'required|string|max:255',
+            'property_code' => 'nullable|string|max:50',
             'company_name' => 'required|string|max:255',
             'property_type' => 'required|array',
             'property_type.*' => 'string',
@@ -103,12 +104,14 @@ class PropertyController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'property_name' => 'required|string|max:255',
+            'property_code' => 'nullable|string|max:50',
             'company_name' => 'required|string|max:255',
             'property_type' => 'required|array',
             'property_type.*' => 'string',
             'address' => 'required|string|max:255',
             'added_by' => 'required|exists:users,id',
         ]);
+
 
         if ($validator->fails()) {
             return back()->withErrors($validator)->withInput();
@@ -149,6 +152,7 @@ class PropertyController extends Controller
         if ($request->has('search') && !empty($request->search)) {
             $query->where(function($q) use ($request) {
                 $q->where('property_name', 'like', '%' . $request->search . '%')
+                  ->orWhere('property_code', 'like', '%' . $request->search . '%')
                   ->orWhere('company_name', 'like', '%' . $request->search . '%')
                   ->orWhere('address', 'like', '%' . $request->search . '%');
             });
@@ -165,7 +169,7 @@ class PropertyController extends Controller
         // Sort logic
         $sortBy = $request->get('sort_by', 'created_at');
         $sortDir = $request->get('sort_dir', 'desc');
-        $allowedSorts = ['id', 'property_name', 'company_name', 'created_at'];
+        $allowedSorts = ['id', 'property_name', 'property_code', 'company_name', 'created_at'];
 
         if (in_array($sortBy, $allowedSorts)) {
             $query->orderBy($sortBy, $sortDir);
@@ -183,7 +187,7 @@ class PropertyController extends Controller
             "Expires"             => "0"
         ];
 
-        $columns = ['ID', 'Property Name', 'Company Name', 'Address', 'Property Type', 'Added By', 'Created At'];
+        $columns = ['ID', 'Property Code', 'Property Name', 'Company Name', 'Address', 'Property Type', 'Added By', 'Created At'];
 
         $callback = function() use($properties, $columns) {
             $file = fopen('php://output', 'w');
@@ -191,6 +195,7 @@ class PropertyController extends Controller
 
             foreach ($properties as $property) {
                 $row['ID']  = $property->id;
+                $row['Property Code'] = $property->property_code ?: 'N/A';
                 $row['Property Name'] = $property->property_name;
                 $row['Company Name']  = $property->company_name;
                 $row['Address'] = $property->address ?? 'N/A';
@@ -198,7 +203,7 @@ class PropertyController extends Controller
                 $row['Added By'] = $property->user ? $property->user->name : 'N/A';
                 $row['Created At'] = $property->created_at->format('Y-m-d H:i:s');
 
-                fputcsv($file, array($row['ID'], $row['Property Name'], $row['Company Name'], $row['Address'], $row['Property Type'], $row['Added By'], $row['Created At']));
+                fputcsv($file, array($row['ID'], $row['Property Code'], $row['Property Name'], $row['Company Name'], $row['Address'], $row['Property Type'], $row['Added By'], $row['Created At']));
             }
 
             fclose($file);
@@ -206,4 +211,5 @@ class PropertyController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+
 }

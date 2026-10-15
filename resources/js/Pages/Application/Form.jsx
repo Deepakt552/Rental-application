@@ -53,6 +53,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     const [propertyLoading, setPropertyLoading] = useState(false);
     const [propertyModalError, setPropertyModalError] = useState('');
     const [showErrorModal, setShowErrorModal] = useState(false);
+    const [isPropertySearchFocused, setIsPropertySearchFocused] = useState(false);
 
     // Check if property details are set on load
     useEffect(() => {
@@ -86,7 +87,12 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
     // Property search logic
     useEffect(() => {
-        if (propertySearch.length < 2 || !companyName) {
+        if (!isPropertySearchFocused || propertySearch.length < 2 || !companyName) {
+            setPropertyResults([]);
+            return;
+        }
+
+        if (selectedProperty && selectedProperty.property_name === propertySearch) {
             setPropertyResults([]);
             return;
         }
@@ -100,23 +106,30 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 })
                 .catch(err => console.error(err))
                 .finally(() => setPropertyLoading(false));
-        }, 400);
+        }, 300);
 
         return () => clearTimeout(delayDebounce);
-    }, [propertySearch, companyName]);
+    }, [propertySearch, companyName, isPropertySearchFocused]);
 
     const handleSelectProperty = (property) => {
         setSelectedProperty(property);
         setPropertySearch(property.property_name);
         setPropertyResults([]);
-        setPropertyTypes(property.property_type || []);
+        setIsPropertySearchFocused(false);
+        const types = Array.isArray(property.property_type) ? property.property_type : (property.property_type ? [property.property_type] : []);
+        setPropertyTypes(types);
+        if (types.length > 0) {
+            setSelectedPropertyType(types[0]);
+        }
     };
 
     const handlePropertySubmit = () => {
         setPropertyModalError('');
 
+        const propertyToUse = selectedProperty || (propertySearch?.trim() ? { id: null, property_name: propertySearch.trim() } : null);
+
         const missing = [];
-        if (!selectedProperty) missing.push('Property Name');
+        if (!propertyToUse) missing.push('Property Name');
         if (!selectedPropertyType) missing.push('Property Type');
         if (!desiredMoveDate) missing.push('Desired Move Date');
         if (!source) missing.push('Source');
@@ -130,8 +143,8 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         const applicationData = {
             company_name: companyName,
             applying_property: applyingProperty,
-            property_id: selectedProperty.id,
-            property_name: selectedProperty.property_name,
+            property_id: propertyToUse.id,
+            property_name: propertyToUse.property_name,
             property_type: selectedPropertyType,
             desired_move_date: desiredMoveDate,
             source: source,
@@ -139,6 +152,33 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
         };
 
         localStorage.setItem('rental_application', JSON.stringify(applicationData));
+
+        const idToUse = applicantId || localStorage.getItem('applicant_id');
+        if (idToUse) {
+            safeFetch('/api/application/property-details/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                },
+                body: JSON.stringify({
+                    applicant_id: idToUse,
+                    property_id: propertyToUse.id,
+                    property_name: propertyToUse.property_name,
+                    property_type: selectedPropertyType,
+                    desired_move_date: desiredMoveDate,
+                    source: source,
+                    source_other: source === 'Other' ? sourceOther.trim() : null
+                })
+            }).then(res => res ? res.json() : null)
+              .then(data => {
+                  if (data && data.success) {
+                      toast.success('Property details updated successfully!');
+                  }
+              })
+              .catch(err => console.error(err));
+        }
 
         setShowPropertyModal(false);
         toast.success('Property details saved successfully!');
@@ -1340,6 +1380,40 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         if (fd.vehicles) setVehicles(fd.vehicles);
                         if (fd.emergency_contact) setFormData(prev => ({ ...prev, emergency_contact: fd.emergency_contact }));
                         if (fd.additional_persons) setAdditionalPersons(fd.additional_persons);
+
+                        // Load property & move-in details
+                        if (result.source) setSource(result.source);
+                        if (result.source_other) setSourceOther(result.source_other);
+                        if (result.desired_move_date) {
+                            setDesiredMoveDate(result.desired_move_date.includes('T') ? result.desired_move_date.split('T')[0] : result.desired_move_date);
+                        }
+                        if (result.property_name) {
+                            setPropertySearch(result.property_name);
+                            fetch(`/properties/search?company_name=${encodeURIComponent(result.company_name || 'Triumph')}&search=${encodeURIComponent(result.property_name)}`)
+                                .then(res => res ? res.json() : null)
+                                .then(data => {
+                                    if (data && data.data && data.data.length > 0) {
+                                        const match = data.data.find(p => p.property_name?.toLowerCase() === result.property_name?.toLowerCase()) || data.data[0];
+                                        const types = Array.isArray(match.property_type) ? match.property_type : (match.property_type ? [match.property_type] : []);
+                                        if (types.length > 0) {
+                                            setPropertyTypes(prev => [...new Set([...prev, ...types])]);
+                                        }
+                                    }
+                                })
+                                .catch(() => {});
+                        }
+                        if (result.property_type) {
+                            setSelectedPropertyType(result.property_type);
+                            setPropertyTypes(prev => prev.includes(result.property_type) ? prev : [...prev, result.property_type]);
+                        }
+                        if (result.company_name) setCompanyName(result.company_name);
+                        if (result.property_id || result.property_name) {
+                            setSelectedProperty({
+                                id: result.property_id,
+                                property_name: result.property_name,
+                                property_type: result.property_type ? [result.property_type] : []
+                            });
+                        }
                     }
                 })
                 .catch(err => console.error('Error loading draft:', err));
@@ -3210,14 +3284,35 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
                 {/* Property Selection Modal */}
                 {showPropertyModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => (applicantId || selectedProperty || propertySearch) && setShowPropertyModal(false)}
+                        ></div>
 
-                        <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6 border border-slate-200/60 z-10 transform transition-all">
-                            <div className="mb-6">
-                                <h2 className="text-lg font-bold text-slate-800 tracking-tight text-center">
-                                    Enter Property Details
-                                </h2>
+                        <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 border border-slate-200/80 z-10 transform transition-all animate-in fade-in zoom-in-95 duration-200">
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-[#0e4a81]">
+                                        <Building2 className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                                            {applicantId ? 'Edit Property & Move-In Details' : 'Enter Property Details'}
+                                        </h2>
+                                        <p className="text-[11px] text-slate-400">Specify property, move-in preferences and lead source</p>
+                                    </div>
+                                </div>
+                                {(applicantId || selectedProperty || propertySearch) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPropertyModal(false)}
+                                        className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
                             </div>
 
                             {propertyModalError && (
@@ -3235,72 +3330,60 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                 {/* Property Search */}
                                 <div className="relative">
                                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">
-                                        Property Name
+                                        Property Name <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
                                         <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
                                         <input
                                             type="text"
                                             value={propertySearch}
+                                            onFocus={() => setIsPropertySearchFocused(true)}
+                                            onBlur={() => setTimeout(() => setIsPropertySearchFocused(false), 250)}
                                             onChange={(e) => {
+                                                setIsPropertySearchFocused(true);
                                                 setPropertySearch(e.target.value);
-                                                setSelectedProperty(null);
-                                                setPropertyTypes([]);
-                                                setSelectedPropertyType('');
+                                                if (selectedProperty && selectedProperty.property_name !== e.target.value) {
+                                                    setSelectedProperty(null);
+                                                }
                                             }}
-                                            placeholder={propertyLoading ? "Searching..." : "Type min 2 letters..."}
-                                            className="w-full h-10 rounded-xl border border-slate-200 pl-10 pr-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                            placeholder={propertyLoading ? "Searching properties..." : "Type property name or address..."}
+                                            className="w-full h-10 rounded-xl border border-slate-200 pl-10 pr-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-800 transition-all outline-none"
                                         />
                                     </div>
 
-                                    {/* Suggestions & No Results Message */}
-                                    {propertyResults.length > 0 ? (
-                                        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                    {/* Suggestions Dropdown */}
+                                    {isPropertySearchFocused && propertyResults.length > 0 && (
+                                        <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-56 overflow-y-auto">
                                             {propertyResults.map((property) => (
                                                 <button
                                                     key={property.id}
                                                     type="button"
-                                                    onClick={() => handleSelectProperty(property)}
-                                                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 flex flex-col transition-colors"
+                                                    onMouseDown={() => handleSelectProperty(property)}
+                                                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 flex flex-col transition-colors cursor-pointer"
                                                 >
-                                                    <span className="font-semibold text-sm text-slate-800">
+                                                    <span className="font-bold text-xs text-slate-800">
                                                         {property.property_name}
                                                     </span>
-                                                    <span className="text-[11px] font-medium text-slate-500 mt-0.5">
-                                                        {property.property_type.join(', ')}
+                                                    <span className="text-[10px] text-slate-500 mt-0.5">
+                                                        {Array.isArray(property.property_type) ? property.property_type.join(', ') : (property.property_type || 'Residential')}
+                                                        {property.address ? ` • ${property.address}` : ''}
                                                     </span>
                                                 </button>
                                             ))}
                                         </div>
-                                    ) : (
-                                        propertySearch.trim().length >= 2 && !propertyLoading && !selectedProperty && (
-                                            <div className="absolute z-50 mt-1 w-full bg-white border border-amber-200 rounded-xl shadow-xl p-3.5 text-xs text-slate-700 bg-amber-50/70">
-                                                <div className="flex items-start gap-2.5">
-                                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                                    <div>
-                                                        <p className="font-semibold text-slate-800 leading-snug">
-                                                            No property was found matching your search <span className="font-bold text-brand">"{propertySearch}"</span>.
-                                                        </p>
-                                                        <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                                                            Please try searching using the complete property address.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )
                                     )}
                                 </div>
 
                                 {/* Property Type */}
-                                {propertyTypes.length > 0 && (
-                                    <div>
-                                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">
-                                            Property Type
-                                        </label>
+                                <div>
+                                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">
+                                        Property Type <span className="text-red-500">*</span>
+                                    </label>
+                                    {propertyTypes.length > 0 ? (
                                         <select
                                             value={selectedPropertyType}
                                             onChange={(e) => setSelectedPropertyType(e.target.value)}
-                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
                                         >
                                             <option value="">Select Property Type</option>
                                             {propertyTypes.map((type, index) => (
@@ -3308,21 +3391,31 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                                     {type}
                                                 </option>
                                             ))}
+                                            {selectedPropertyType && !propertyTypes.includes(selectedPropertyType) && (
+                                                <option value={selectedPropertyType}>{selectedPropertyType}</option>
+                                            )}
                                         </select>
-                                    </div>
-                                )}
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={selectedPropertyType}
+                                            onChange={(e) => setSelectedPropertyType(e.target.value)}
+                                            placeholder="e.g. 1 Bedroom, 2 Bedroom, Studio"
+                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                        />
+                                    )}
+                                </div>
 
                                 {/* Desired Move Date */}
                                 <div>
                                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">
-                                        Desired Move Date
+                                        Desired Move Date <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="date"
-                                        min={new Date().toISOString().split('T')[0]}
                                         value={desiredMoveDate}
                                         onChange={(e) => setDesiredMoveDate(e.target.value)}
-                                        className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                        className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
                                     />
                                 </div>
 
@@ -3339,13 +3432,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                                 setSourceOther('');
                                             }
                                         }}
-                                        className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                        className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
                                     >
                                         <option value="">Select where you heard about us</option>
                                         {LEAD_SOURCES.map((src, index) => (
-                                            <option key={index} value={src}>
-                                                {src}
-                                            </option>
+                                            <option key={index} value={src}>{src}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -3360,41 +3451,46 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                             type="text"
                                             value={sourceOther}
                                             onChange={(e) => setSourceOther(e.target.value)}
-                                            placeholder="Please specify where you heard about us..."
-                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
+                                            placeholder="Please specify lead source..."
+                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"
                                         />
                                     </div>
                                 )}
 
-                                {/* Submit */}
-                                <button
-                                    onClick={handlePropertySubmit}
-                                    className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-brand text-white py-2.5 text-sm font-medium shadow-md shadow-brand/20 hover:bg-brand-dark transition-all"
-                                >
-                                    Continue Application
-                                    <CheckCircle2 className="w-4 h-4" />
-                                </button>
-
-                                {/* Sign In / Account Link */}
-                                <div className="pt-3 border-t border-slate-100 text-center">
-                                    <p className="text-xs text-slate-500 mb-2 font-medium">Already have an account?</p>
-                                    <Link
-                                        href={auth?.user ? (auth.user.role === 'admin' || auth.user.role === 'superadmin' ? '/admin/dashboard' : '/dashboard') : '/login'}
-                                        className="w-full py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+                                {/* Modal Actions */}
+                                <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+                                    {(applicantId || selectedProperty || propertySearch) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPropertyModal(false)}
+                                            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition-all cursor-pointer"
+                                        >
+                                            Cancel
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handlePropertySubmit}
+                                        className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] hover:opacity-95 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                                     >
-                                        {auth?.user ? (
-                                            <>
-                                                <LayoutDashboard className="w-4 h-4 text-brand" />
-                                                <span>Go to Dashboard</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <LogIn className="w-4 h-4 text-brand" />
-                                                <span>Sign In to Account</span>
-                                            </>
-                                        )}
-                                    </Link>
+                                        <span>{applicantId ? 'Save Property Details' : 'Continue Application'}</span>
+                                        <CheckCircle2 className="w-4 h-4" />
+                                    </button>
                                 </div>
+
+                                {/* Sign In / Account Link (Only shown for guest new applicants) */}
+                                {!auth?.user && !applicantId && (
+                                    <div className="pt-3 border-t border-slate-100 text-center">
+                                        <p className="text-xs text-slate-500 mb-2 font-medium">Already have an account?</p>
+                                        <Link
+                                            href="/login"
+                                            className="w-full py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+                                        >
+                                            <LogIn className="w-4 h-4 text-brand" />
+                                            <span>Sign In to Account</span>
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -3410,6 +3506,29 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     <h1 className="text-2xl font-bold text-gray-800">Rental Application Form</h1>
                                     <p className="text-gray-500 text-sm mt-1">Complete all sections to submit your application</p>
                                 </div>
+
+                                {(selectedProperty?.property_name || propertySearch) && (
+                                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2 text-xs">
+                                        <div>
+                                            <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                                                <Building2 className="w-3.5 h-3.5 text-brand" />
+                                                <span>{selectedProperty?.property_name || propertySearch}</span>
+                                                {selectedPropertyType && <span className="text-slate-400 font-normal">({selectedPropertyType})</span>}
+                                            </p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                                Move-in: <span className="font-medium text-slate-700">{desiredMoveDate ? new Date(desiredMoveDate + 'T00:00:00').toLocaleDateString() : 'Not set'}</span>
+                                                {source && <span className="ml-2 font-medium text-slate-500">· Source: {source === 'Other' && sourceOther ? sourceOther : source}</span>}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPropertyModal(true)}
+                                            className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 text-xs shadow-sm transition-all cursor-pointer"
+                                        >
+                                            Edit
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

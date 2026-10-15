@@ -28,11 +28,13 @@ class PropertyController extends Controller
             ->when($search, function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('property_name', 'LIKE', "%{$search}%")
+                        ->orWhere('property_code', 'LIKE', "%{$search}%")
                         ->orWhere('address', 'LIKE', "%{$search}%");
                 });
             })
             ->select(
                 'id',
+                'property_code',
                 'property_name',
                 'company_name',
                 'property_type',
@@ -40,6 +42,7 @@ class PropertyController extends Controller
             )
             ->limit(10)
             ->get();
+
 
         return response()->json([
             'status' => true,

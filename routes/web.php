@@ -102,6 +102,7 @@ Route::prefix('api/application')->group(function () {
     Route::post('/step10/save', [App\Http\Controllers\ApplicationController::class, 'saveStep10']);
     Route::delete('/document/{documentId}', [App\Http\Controllers\ApplicationController::class, 'deleteDocument']);
     Route::post('/final-submit', [App\Http\Controllers\ApplicationController::class, 'finalSubmit']);
+    Route::post('/property-details/save', [App\Http\Controllers\ApplicationController::class, 'savePropertyDetails']);
 
     Route::get('/ping', function () {
         return response()->json(['success' => true]);
@@ -208,7 +209,10 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
     Route::get('/applications/export', [AdminApplicationController::class, 'export'])->name('admin.applications.export');
     Route::get('/applications/{id}', [AdminApplicationController::class, 'show'])->name('admin.applications.show');
     Route::post('/applications/{id}/resend', [AdminApplicationController::class, 'resend'])->name('admin.applications.resend');
+    Route::post('/applications/{id}/send-sms', [AdminApplicationController::class, 'sendSms'])->name('admin.applications.send-sms');
+    Route::patch('/applications/{id}/move-in-status', [AdminApplicationController::class, 'updateMoveInStatus'])->name('admin.applications.move-in-status');
     Route::post('/applications/{id}/comment', [AdminApplicationController::class, 'updateComment'])->name('admin.applications.comment');
+    Route::put('/applications/{id}/property-details', [AdminApplicationController::class, 'updatePropertyDetails'])->name('admin.applications.property-details');
     Route::delete('/applications/{id}', [AdminApplicationController::class, 'destroy'])->name('admin.applications.destroy');
     Route::post('/applications/{id}/upload-document', [AdminApplicationController::class, 'uploadDocument'])->name('admin.applications.upload-document');
     Route::delete('/applications/{id}/document/{documentId}', [AdminApplicationController::class, 'deleteDocument'])->name('admin.applications.delete-document');
@@ -250,4 +254,13 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
 Route::get('/properties/search', [PropertyController::class, 'search']);
 Route::get('/properties/types/{id}', [PropertyController::class, 'getPropertyTypes']);
 
+// Secure & Encrypted Document Access (Protected by auth, role/ownership check, and tamper-proof hash)
+Route::get('/secure-documents/{id}/{hash}', [\App\Http\Controllers\SecureDocumentController::class, 'show'])->name('documents.secure-view');
+
+// Strict Protection: Block any direct access to documents via public storage URLs
+Route::any('/storage/documents/{path?}', function () {
+    abort(403, 'Direct access to documents is forbidden.');
+})->where('path', '.*');
+
 require __DIR__ . '/auth.php';
+

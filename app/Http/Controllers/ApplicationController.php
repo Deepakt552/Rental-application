@@ -20,8 +20,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -838,10 +838,7 @@ class ApplicationController extends Controller
                         ->get();
 
                     foreach ($oldDocuments as $oldDocument) {
-                        if ($oldDocument->file_path) {
-                            Storage::disk('public')->delete($oldDocument->file_path);
-                        }
-
+                        $oldDocument->deletePhysicalFile();
                         $oldDocument->delete();
                     }
                 }
@@ -871,11 +868,11 @@ class ApplicationController extends Controller
                             (Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) ?: 'file')
                             . '.' . strtolower($extension);
 
-                        $filePath = $file->storeAs(
-                            'documents/' . $sessionId,
-                            $fileName,
-                            'public'
-                        );
+                        $filePath = 'documents/' . $sessionId . '/' . $fileName;
+
+                        // Encrypt file contents before saving to private disk
+                        $encryptedContent = Crypt::encrypt(file_get_contents($file->getRealPath()));
+                        Storage::disk('local')->put($filePath, $encryptedContent);
 
                         ApplicantDocument::create([
                             'applicant_id'      => $request->applicant_id,
@@ -917,10 +914,8 @@ class ApplicationController extends Controller
                 return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
             }
 
-            // Delete the physical file
-            if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
-                Storage::disk('public')->delete($document->file_path);
-            }
+            // Delete the physical file securely
+            $document->deletePhysicalFile();
 
             $document->delete();
 
@@ -975,7 +970,7 @@ class ApplicationController extends Controller
                             'id'                => $doc->id,
                             'document_type'     => $doc->document_type,
                             'original_filename' => $doc->original_filename,
-                            'file_url'          => asset(Storage::url($doc->file_path)),
+                            'file_url'          => $doc->url,
                             'description'       => $doc->description
                         ];
                     })->values();
@@ -1046,6 +1041,11 @@ class ApplicationController extends Controller
                     'current_step'   => $applicant->current_step ?? 1,
                     'source'         => $applicant->source,
                     'source_other'   => $applicant->source_other,
+                    'company_name'   => $applicant->company_name,
+                    'property_id'    => $applicant->property_id,
+                    'property_name'  => $applicant->property_name,
+                    'property_type'  => $applicant->property_type,
+                    'desired_move_date' => $applicant->desired_move_date,
                     'form_data'      => $fullData,
                     'documents_list' => $documentsList
                 ]);
@@ -1055,6 +1055,42 @@ class ApplicationController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Save/Update Property & Move-In Details
+     */
+    public function savePropertyDetails(Request $request)
+    {
+        $request->validate([
+            'applicant_id' => 'required|exists:applicants,id',
+            'property_name' => 'required|string|max:255',
+            'property_id' => 'nullable',
+            'property_type' => 'nullable|string|max:255',
+            'desired_move_date' => 'nullable|date',
+            'source' => 'nullable|string|max:255',
+            'source_other' => 'nullable|string|max:255',
+        ]);
+
+        $access = $this->checkApplicantAccessAndPayment($request->applicant_id, false);
+        if (!$access['allowed']) {
+            return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
+        }
+
+        $applicant = $access['applicant'];
+        $applicant->update([
+            'property_id' => $request->property_id ?: null,
+            'property_name' => $request->property_name,
+            'property_type' => $request->property_type,
+            'desired_move_date' => $request->desired_move_date,
+            'source' => $request->source,
+            'source_other' => $request->source === 'Other' ? $request->source_other : null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Property details updated successfully.'
+        ]);
     }
 
     /**
