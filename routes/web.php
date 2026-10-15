@@ -18,18 +18,6 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
     ]);
 });
-
-Route::get('/phpinfo', function () {
-    phpinfo();
-});
-
-Route::get('/test-gd', function () {
-    return [
-        'gd_loaded'  => extension_loaded('gd'),
-        'gd_info'    => extension_loaded('gd') ? gd_info() : 'Not available',
-        'php_version' => phpversion(),
-    ];
-});
 // Consent Form Routes (Add this before your existing routes)
 Route::prefix('consent')->name('consent.')->group(function () {
     Route::get('/', [ConsentController::class, 'index'])->name('index');
@@ -108,8 +96,8 @@ Route::prefix('api/application')->group(function () {
         return response()->json(['success' => true]);
     });
 
-    Route::get('/{applicant}/pdf', [App\Http\Controllers\ApplicationController::class, 'viewPdf'])->name('application.pdf');
-    Route::get('/{applicant}/consent/pdf', [App\Http\Controllers\ConsentController::class, 'viewPdf'])->name('application.consent.pdf');
+    Route::get('/{applicant}/pdf', [App\Http\Controllers\ApplicationController::class, 'viewPdf'])->name('application.pdf')->middleware('auth');
+    Route::get('/{applicant}/consent/pdf', [App\Http\Controllers\ConsentController::class, 'viewPdf'])->name('application.consent.pdf')->middleware('auth');
 });
 
 use App\Models\Applicant;

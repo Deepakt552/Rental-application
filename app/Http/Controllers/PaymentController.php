@@ -15,6 +15,13 @@ class PaymentController extends Controller
     {
         $applicant = Applicant::findOrFail($applicantId);
         
+        $user = auth()->user();
+        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']));
+        
+        if (!$isAdmin && (int)$applicant->user_id !== (int)$user->id && strtolower(trim($applicant->email ?? '')) !== strtolower(trim($user->email ?? ''))) {
+            abort(403, 'Unauthorized access to applicant payment.');
+        }
+        
         if ($applicant->payment_status === 'paid') {
             return redirect()->route('dashboard')->with('success', 'Application fee already paid.');
         }
@@ -125,6 +132,13 @@ class PaymentController extends Controller
 
     public function success(Request $request, Applicant $applicant)
     {
+        $user = auth()->user();
+        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']));
+        
+        if (!$isAdmin && (int)$applicant->user_id !== (int)$user->id && strtolower(trim($applicant->email ?? '')) !== strtolower(trim($user->email ?? ''))) {
+            abort(403, 'Unauthorized access to applicant payment.');
+        }
+
         $sessionId = $request->get('session_id');
         
         if (!$sessionId) {
@@ -157,6 +171,13 @@ class PaymentController extends Controller
 
     public function cancel(Applicant $applicant)
     {
+        $user = auth()->user();
+        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']));
+        
+        if (!$isAdmin && (int)$applicant->user_id !== (int)$user->id && strtolower(trim($applicant->email ?? '')) !== strtolower(trim($user->email ?? ''))) {
+            abort(403, 'Unauthorized access to applicant payment.');
+        }
+
         return Inertia::render('Payment/Cancel', [
             'applicant' => $applicant
         ]);

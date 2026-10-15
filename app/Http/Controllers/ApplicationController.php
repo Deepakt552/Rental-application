@@ -45,16 +45,32 @@ class ApplicationController extends Controller
         }
 
         $user = Auth::user();
-        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin());
+        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']));
 
         // Authorization check
         if ($user) {
-            if (!$isAdmin && $applicant->user_id !== $user->id) {
-                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            if (!$isAdmin && (int)$applicant->user_id !== (int)$user->id) {
+                // If applicant has no user_id yet, but email matches the authenticated user, associate it
+                if ($applicant->user_id === null && !empty($applicant->email) && strtolower(trim($applicant->email)) === strtolower(trim($user->email))) {
+                    $applicant->update(['user_id' => $user->id]);
+                } else {
+                    return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+                }
             }
         } else {
-            if ($applicant->user_id !== null) {
-                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            // For unauthenticated guest: they MUST have the matching session!
+            $sessionApplicantId = session('current_applicant_id');
+            $sessionAppSessionId = session('applicant_session_id');
+
+            $matches = false;
+            if ($sessionApplicantId && (int)$sessionApplicantId === (int)$applicant->id) {
+                $matches = true;
+            } elseif ($sessionAppSessionId && $sessionAppSessionId === $applicant->session_id) {
+                $matches = true;
+            }
+
+            if (!$matches) {
+                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized: Invalid or expired application session.'];
             }
         }
 
@@ -1071,46 +1087,90 @@ class ApplicationController extends Controller
     public function resumeByEmail(Request $request)
     {
         $email = $request->email ?? $request->route('email');
+        if (!$email) {
+            return response()->json(['success' => false, 'message' => 'Email required'], 400);
+        }
+
+        $emailClean = strtolower(trim($email));
+
         try {
-            $applicant = Applicant::where('email', $email)
+            $applicant = Applicant::where('email', $emailClean)
                 ->where('status', 'draft')
                 ->latest()
                 ->first();
 
-            if ($applicant) {
-                $fullData = $applicant->loadFullFormData();
-
-                // Build documents list at top level (not inside form_data)
-                $documentsList = ApplicantDocument::where('applicant_id', $applicant->id)->get()
-                    ->map(function ($doc) {
-                        return [
-                            'id'                => $doc->id,
-                            'document_type'     => $doc->document_type,
-                            'original_filename' => $doc->original_filename,
-                            'file_url'          => $doc->url,
-                            'url'               => $doc->url,
-                            'description'       => $doc->description
-                        ];
-                    })->values();
-
-                session([
-                    'current_applicant_id' => $applicant->id,
-                    'applicant_session_id' => $applicant->session_id,
-                ]);
-
-                return response()->json([
-                    'success'        => true,
-                    'applicant_id'   => $applicant->id,
-                    'session_id'     => $applicant->session_id,
-                    'current_step'   => $applicant->current_step ?? 1,
-                    'source'         => $applicant->source,
-                    'source_other'   => $applicant->source_other,
-                    'form_data'      => $fullData,
-                    'documents_list' => $documentsList
-                ]);
+            if (!$applicant) {
+                return response()->json(['success' => false, 'message' => 'No active draft found for this email.'], 404);
             }
 
-            return response()->json(['success' => false], 404);
+            $user = Auth::user();
+            $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']));
+
+            if ($user) {
+                if (!$isAdmin && (int)$applicant->user_id !== (int)$user->id && strtolower(trim($applicant->email)) !== strtolower(trim($user->email))) {
+                    return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+                }
+            } else {
+                // If a user account exists for this email, they must authenticate
+                $userAccountExists = User::where('email', $emailClean)->exists();
+                if ($userAccountExists) {
+                    return response()->json([
+                        'success' => false,
+                        'requires_login' => true,
+                        'message' => 'An account exists for this email. Please log in with your credentials to resume.'
+                    ], 401);
+                }
+
+                // Check guest session
+                $sessionAppId = session('current_applicant_id');
+                $sessionAppSessionId = session('applicant_session_id');
+
+                $matches = false;
+                if ($sessionAppId && (int)$sessionAppId === (int)$applicant->id) {
+                    $matches = true;
+                } elseif ($sessionAppSessionId && $sessionAppSessionId === $applicant->session_id) {
+                    $matches = true;
+                }
+
+                if (!$matches) {
+                    return response()->json([
+                        'success' => false,
+                        'requires_login' => true,
+                        'message' => 'Session expired or unauthorized. Please log in to continue.'
+                    ], 403);
+                }
+            }
+
+            $fullData = $applicant->loadFullFormData();
+
+            // Build documents list at top level (not inside form_data)
+            $documentsList = ApplicantDocument::where('applicant_id', $applicant->id)->get()
+                ->map(function ($doc) {
+                    return [
+                        'id'                => $doc->id,
+                        'document_type'     => $doc->document_type,
+                        'original_filename' => $doc->original_filename,
+                        'file_url'          => $doc->url,
+                        'url'               => $doc->url,
+                        'description'       => $doc->description
+                    ];
+                })->values();
+
+            session([
+                'current_applicant_id' => $applicant->id,
+                'applicant_session_id' => $applicant->session_id,
+            ]);
+
+            return response()->json([
+                'success'        => true,
+                'applicant_id'   => $applicant->id,
+                'session_id'     => $applicant->session_id,
+                'current_step'   => $applicant->current_step ?? 1,
+                'source'         => $applicant->source,
+                'source_other'   => $applicant->source_other,
+                'form_data'      => $fullData,
+                'documents_list' => $documentsList
+            ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
@@ -1388,8 +1448,15 @@ class ApplicationController extends Controller
     {
         // Only allow if authorized (owner or admin)
         $user = Auth::user();
-        if (!$user || (Auth::id() !== $applicant->user_id && $user->role !== 'admin' && $user->role !== 'superadmin')) {
-            abort(403);
+        if (!$user) {
+            abort(403, 'Authentication required');
+        }
+
+        $isAdmin = $user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']);
+        $isOwner = ((int)$user->id === (int)$applicant->user_id) || ($applicant->user_id === null && !empty($applicant->email) && strtolower(trim($applicant->email)) === strtolower(trim($user->email)));
+
+        if (!$isAdmin && !$isOwner) {
+            abort(403, 'Unauthorized access to application PDF');
         }
 
         // Save original memory limit for restoration

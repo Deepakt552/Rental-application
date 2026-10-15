@@ -37,21 +37,45 @@ class ConsentController extends Controller
             $applicant = \App\Models\Applicant::where('session_id', $sessionId)->first();
         }
 
+        $user = Auth::user();
+        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']));
+
         if (!$applicant) {
+            // If applicant not found, verify guest has this session ID in their active session
+            if (!$isAdmin) {
+                $currentConsentSession = session('consent_session_id');
+                if (!$currentConsentSession || $currentConsentSession !== $sessionId) {
+                    return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized session'];
+                }
+            }
             return ['allowed' => true];
         }
 
-        $user = Auth::user();
-        $isAdmin = $user && ($user->isAdmin() || $user->isSuperAdmin());
-
         // Authorization check
         if ($user) {
-            if (!$isAdmin && $applicant->user_id !== $user->id) {
-                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            if (!$isAdmin && (int)$applicant->user_id !== (int)$user->id) {
+                if ($applicant->user_id === null && !empty($applicant->email) && strtolower(trim($applicant->email)) === strtolower(trim($user->email))) {
+                    $applicant->update(['user_id' => $user->id]);
+                } else {
+                    return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+                }
             }
         } else {
-            if ($applicant->user_id !== null) {
-                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized'];
+            $sessionConsentId = session('consent_session_id');
+            $sessionApplicantId = session('current_applicant_id');
+            $sessionAppSessionId = session('applicant_session_id');
+
+            $matches = false;
+            if ($sessionConsentId && $sessionConsentId === $sessionId) {
+                $matches = true;
+            } elseif ($sessionApplicantId && (int)$sessionApplicantId === (int)$applicant->id) {
+                $matches = true;
+            } elseif ($sessionAppSessionId && $sessionAppSessionId === $applicant->session_id) {
+                $matches = true;
+            }
+
+            if (!$matches) {
+                return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized: Invalid or expired consent session.'];
             }
         }
 
@@ -420,6 +444,11 @@ class ConsentController extends Controller
                 ], 404);
             }
 
+            $access = $this->checkConsentAccessAndPayment($sessionId, false);
+            if (!$access['allowed']) {
+                return response()->json(['error' => $access['message']], $access['error_code']);
+            }
+
             // Generate PDF and get path
             $pdfPath = $this->pdfService->generateConsentPDF($sessionId);
 
@@ -473,6 +502,11 @@ class ConsentController extends Controller
                     'success' => false,
                     'message' => 'No session found'
                 ], 404);
+            }
+
+            $access = $this->checkConsentAccessAndPayment($sessionId, false);
+            if (!$access['allowed']) {
+                return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
             }
 
             $consentData = $this->consentService->getConsentData($sessionId);
@@ -701,6 +735,11 @@ class ConsentController extends Controller
                 ]);
             }
 
+            $access = $this->checkConsentAccessAndPayment($sessionId, false);
+            if (!$access['allowed']) {
+                return response()->json(['has_data' => false, 'completed_steps' => []], $access['error_code']);
+            }
+
             $consentData = $this->consentService->getConsentData($sessionId);
 
             $completedSteps = [];
@@ -727,8 +766,16 @@ class ConsentController extends Controller
     public function viewPdf(\App\Models\Applicant $applicant)
     {
         // Only allow if authorized
-        if (Auth::id() !== $applicant->user_id && Auth::user()->role !== 'admin' && Auth::user()->role !== 'superadmin') {
-            abort(403);
+        $user = Auth::user();
+        if (!$user) {
+            abort(403, 'Authentication required');
+        }
+
+        $isAdmin = $user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']);
+        $isOwner = ((int)$user->id === (int)$applicant->user_id) || ($applicant->user_id === null && !empty($applicant->email) && strtolower(trim($applicant->email)) === strtolower(trim($user->email)));
+
+        if (!$isAdmin && !$isOwner) {
+            abort(403, 'Unauthorized access to consent document');
         }
 
         $record = $applicant->consentRecord;

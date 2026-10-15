@@ -17,12 +17,18 @@ class AdminMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        if (!Auth::check()) {
-            return response()->json(['message' => 'Unauthenticated'], 401);
+        if (!Auth::check() || !$user) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Unauthenticated'], 401);
+            }
+            return redirect()->guest(route('login'));
         }
 
-        if (!$user->isAdmin() && !$user->isSuperAdmin()) {
-            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        if (!$user->isAdmin() && !$user->isSuperAdmin() && !in_array(strtolower($user->role ?? ''), ['admin', 'superadmin'])) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+            }
+            return redirect()->route('dashboard')->with('error', 'Unauthorized. Admin access required.');
         }
 
         return $next($request);
