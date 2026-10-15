@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Applicant;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PDFService
@@ -93,6 +94,18 @@ class PDFService
 
             // 2. Add Consent PDF if available
             $record = $applicant->consentRecord;
+            if (!$record) {
+                $record = \App\Models\ConsentRecord::where('applicant_id', $applicant->id)
+                    ->where('status', 'completed')
+                    ->latest()
+                    ->first();
+            }
+            if (!$record && $applicant->session_id) {
+                $record = \App\Models\ConsentRecord::where('session_id', $applicant->session_id)
+                    ->latest()
+                    ->first();
+            }
+
             if ($record && $record->session_id) {
                 $consentService = app(\App\Services\PDFConsentService::class);
                 if ($applicant->type === 'superadmin') {
@@ -110,38 +123,76 @@ class PDFService
             }
 
             // 3. Add uploaded Documents
-           // 3. Add uploaded Documents
-if ($applicant->documents) {
-    $seenHashes = [];
-
-    foreach ($applicant->documents as $doc) {
-        // Skip rows whose content we've already merged in this run
-        $key = $doc->file_hash ?? $doc->original_filename; // fallback if hash not backfilled yet
-        if (isset($seenHashes[$key])) {
-            continue;
-        }
-        $seenHashes[$key] = true;
-
-        $fullDocPath = storage_path('app/public/' . $doc->file_path);
-        if (file_exists($fullDocPath)) {
-            $mime = strtolower($doc->mime_type);
-            if ($mime === 'application/pdf') {
-                $compatDocPath = $this->ensureCompatiblePdf($fullDocPath, $tempFiles);
-                $merger->addFile($compatDocPath);
-            } elseif (in_array($mime, ['image/jpeg', 'image/jpg', 'image/png'])) {
-                $tempImagePdfPath = storage_path('app/temp/img_doc_' . uniqid() . '.pdf');
-                $tempFiles[] = $tempImagePdfPath;
-                $imageData = base64_encode(file_get_contents($fullDocPath));
-                $src = 'data:' . $mime . ';base64,' . $imageData;
-
-                $html = '<html><body style="margin:0;padding:20px;text-align:center;"><h3 style="font-family:sans-serif;color:#333;">Document: ' . htmlspecialchars($doc->original_filename) . '</h3><img src="' . $src . '" style="max-width:100%; max-height:850px; object-fit:contain;" /></body></html>';
-                $imgPdf = Pdf::loadHTML($html)->setPaper('A4', 'portrait');
-                $imgPdf->save($tempImagePdfPath);
-                $merger->addFile($tempImagePdfPath);
+            if (!$applicant->relationLoaded('documents')) {
+                $applicant->load('documents');
             }
-        }
-    }
-}
+
+            if ($applicant->documents && $applicant->documents->count() > 0) {
+                $seenHashes = [];
+
+                foreach ($applicant->documents as $doc) {
+                    // Skip duplicates in same merge
+                    $key = $doc->file_hash ?? ($doc->original_filename . '_' . $doc->id);
+                    if (isset($seenHashes[$key])) {
+                        continue;
+                    }
+                    $seenHashes[$key] = true;
+
+                    // Decrypt file content in memory (handles local encrypted and public legacy files)
+                    $content = $doc->getDecryptedContent();
+                    if ($content === null || strlen($content) === 0) {
+                        Log::warning("Could not decrypt content for Document #{$doc->id} ({$doc->original_filename})");
+                        continue;
+                    }
+
+                    $mime = strtolower($doc->mime_type ?: '');
+                    $ext = strtolower(pathinfo($doc->original_filename ?: $doc->file_path, PATHINFO_EXTENSION));
+                    if (empty($mime) || $mime === 'application/octet-stream') {
+                        if ($ext === 'pdf') {
+                            $mime = 'application/pdf';
+                        } elseif (in_array($ext, ['jpg', 'jpeg'])) {
+                            $mime = 'image/jpeg';
+                        } elseif ($ext === 'png') {
+                            $mime = 'image/png';
+                        } elseif ($ext === 'webp') {
+                            $mime = 'image/webp';
+                        }
+                    }
+
+                    // Check if document is a PDF
+                    if ($mime === 'application/pdf' || str_starts_with($content, '%PDF')) {
+                        $tempPdfPath = storage_path('app/temp/doc_pdf_' . $doc->id . '_' . uniqid() . '.pdf');
+                        $tempFiles[] = $tempPdfPath;
+                        file_put_contents($tempPdfPath, $content);
+                        $compatDocPath = $this->ensureCompatiblePdf($tempPdfPath, $tempFiles);
+                        $merger->addFile($compatDocPath);
+                    } 
+                    // Check if document is an image
+                    elseif (in_array($mime, ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']) ||
+                            in_array($ext, ['jpg', 'jpeg', 'png', 'webp']) ||
+                            (function_exists('getimagesizefromstring') && @getimagesizefromstring($content))) {
+                        $tempImagePdfPath = storage_path('app/temp/img_doc_' . $doc->id . '_' . uniqid() . '.pdf');
+                        $tempFiles[] = $tempImagePdfPath;
+
+                        $imgMime = in_array($mime, ['image/jpeg', 'image/jpg', 'image/png']) ? $mime : 'image/jpeg';
+                        $imageData = base64_encode($content);
+                        $src = 'data:' . $imgMime . ';base64,' . $imageData;
+
+                        $docLabel = ucwords(str_replace('_', ' ', $doc->document_type ?: 'Document'));
+                        $docName = htmlspecialchars($doc->original_filename ?: 'Uploaded Document');
+
+                        $html = '<html><head><style>@page { margin: 15mm 15mm 15mm 15mm; } body { margin:0; padding:10px; text-align:center; font-family: DejaVu Sans, sans-serif; }</style></head><body>'
+                              . '<h3 style="color:#0e4a81; margin-bottom: 5px; font-size: 15px;">' . htmlspecialchars($docLabel) . '</h3>'
+                              . '<p style="color:#64748b; font-size:11px; margin-top:0; margin-bottom: 15px;">' . $docName . '</p>'
+                              . '<img src="' . $src . '" style="max-width:100%; max-height:850px; object-fit:contain;" />'
+                              . '</body></html>';
+
+                        $imgPdf = Pdf::loadHTML($html)->setPaper('A4', 'portrait');
+                        $imgPdf->save($tempImagePdfPath);
+                        $merger->addFile($tempImagePdfPath);
+                    }
+                }
+            }
 
             // Merge all into one PDF
             $mergedContent = $merger->merge();
