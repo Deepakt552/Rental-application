@@ -210,6 +210,7 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
     Route::get('/applications/{id}', [AdminApplicationController::class, 'show'])->name('admin.applications.show');
     Route::post('/applications/{id}/resend', [AdminApplicationController::class, 'resend'])->name('admin.applications.resend');
     Route::post('/applications/{id}/send-sms', [AdminApplicationController::class, 'sendSms'])->name('admin.applications.send-sms');
+    Route::post('/applications/{id}/send-email-reminder', [AdminApplicationController::class, 'sendEmailReminder'])->name('admin.applications.send-email-reminder');
     Route::patch('/applications/{id}/move-in-status', [AdminApplicationController::class, 'updateMoveInStatus'])->name('admin.applications.move-in-status');
     Route::post('/applications/{id}/comment', [AdminApplicationController::class, 'updateComment'])->name('admin.applications.comment');
     Route::put('/applications/{id}/property-details', [AdminApplicationController::class, 'updatePropertyDetails'])->name('admin.applications.property-details');

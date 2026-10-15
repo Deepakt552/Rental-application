@@ -7,6 +7,7 @@ use App\Models\Applicant;
 use App\Services\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 
 class ApplicationController extends Controller
@@ -386,6 +387,93 @@ class ApplicationController extends Controller
         return redirect()->back()->withErrors([
             'sms_error' => 'Failed to send SMS: ' . ($result['error'] ?? 'Unknown Twilio error')
         ]);
+    }
+
+    public function sendEmailReminder(Request $request, $id)
+    {
+        $request->validate([
+            'email' => 'required|email|max:255',
+            'subject' => 'required|string|max:255',
+            'message' => 'required|string|max:10000',
+        ]);
+
+        $applicant = Applicant::with(['personalInformation'])->findOrFail($id);
+
+        $email = trim($request->email);
+        $subject = trim($request->subject);
+        $messageBody = trim($request->message);
+
+        $formType = $applicant->type ?? 'admin';
+        $isExcel = ($formType === 'superadmin' || str_contains(strtolower($applicant->company_name ?? ''), 'excel'));
+        $brandName = $isExcel ? 'Excel Residential Services' : 'Triumph Residential Services';
+
+        // Direct action URL to help applicant complete remaining step
+        $actionUrl = null;
+        if (!$applicant->is_consent_completed) {
+            $actionUrl = $isExcel ? url('/consent/excel') : url('/consent');
+        } elseif ($applicant->payment_status !== 'paid' && $applicant->payment_status !== 'completed') {
+            $actionUrl = $isExcel
+                ? url('/rental-application-excel?applicant_id=' . $applicant->id)
+                : url('/rental-application?applicant_id=' . $applicant->id);
+        } else {
+            $actionUrl = $isExcel
+                ? url('/rental-application-excel?applicant_id=' . $applicant->id)
+                : url('/rental-application?applicant_id=' . $applicant->id);
+        }
+
+        try {
+            Mail::send('emails.tenant-reminder', [
+                'applicant' => $applicant,
+                'subject' => $subject,
+                'messageBody' => $messageBody,
+                'actionUrl' => $actionUrl,
+                'formType' => $formType,
+                'brandName' => $brandName,
+            ], function ($m) use ($email, $subject, $brandName) {
+                $m->to($email)
+                  ->subject($subject);
+            });
+
+            // Log email in email_logs table
+            \App\Models\EmailLog::create([
+                'applicant_id' => $applicant->id,
+                'recipient_email' => $email,
+                'recipient_name' => trim(($applicant->personalInformation?->first_name ?? '') . ' ' . ($applicant->personalInformation?->last_name ?? '')),
+                'recipient_type' => 'user',
+                'subject' => $subject,
+                'message' => $messageBody,
+                'status' => 'sent',
+                'sent_at' => now(),
+            ]);
+
+            $applicant->update([
+                'reminder_sent_count' => ($applicant->reminder_sent_count ?? 0) + 1,
+                'last_reminder_sent_at' => now(),
+            ]);
+
+            return redirect()->back()->with('success', "Email reminder sent successfully to {$email}!");
+        } catch (\Throwable $e) {
+            Log::error('Send tenant email reminder error: ' . $e->getMessage(), [
+                'applicant_id' => $applicant->id,
+                'email' => $email,
+            ]);
+
+            \App\Models\EmailLog::create([
+                'applicant_id' => $applicant->id,
+                'recipient_email' => $email,
+                'recipient_name' => trim(($applicant->personalInformation?->first_name ?? '') . ' ' . ($applicant->personalInformation?->last_name ?? '')),
+                'recipient_type' => 'user',
+                'subject' => $subject,
+                'message' => $messageBody,
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+                'sent_at' => now(),
+            ]);
+
+            return redirect()->back()->withErrors([
+                'email_error' => 'Failed to send email reminder: ' . $e->getMessage()
+            ]);
+        }
     }
 
     public function resend($id)
