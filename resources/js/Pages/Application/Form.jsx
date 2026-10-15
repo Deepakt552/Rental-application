@@ -140,6 +140,16 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             return;
         }
 
+        const todayStr = (() => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        })();
+
+        if (desiredMoveDate && desiredMoveDate < todayStr) {
+            setPropertyModalError('Desired Move-In Date cannot be in the past. Please select today or a future date.');
+            return;
+        }
+
         const applicationData = {
             company_name: companyName,
             applying_property: applyingProperty,
@@ -2907,9 +2917,9 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                                 <p className="text-[10px] text-green-600 font-medium">Uploaded ✓</p>
                                             </div>
                                             <a
-                                                href={uploaded.file_url}
+                                                href={uploaded.file_url || uploaded.url}
                                                 target="_blank"
-                                                rel="noreferrer"
+                                                rel="noopener noreferrer"
                                                 className="p-1 rounded text-green-600 hover:text-green-800"
                                                 title="View file"
                                             >
@@ -3413,6 +3423,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     </label>
                                     <input
                                         type="date"
+                                        min={(() => {
+                                            const d = new Date();
+                                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                        })()}
                                         value={desiredMoveDate}
                                         onChange={(e) => setDesiredMoveDate(e.target.value)}
                                         className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"

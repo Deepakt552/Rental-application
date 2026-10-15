@@ -14,6 +14,7 @@ use App\Models\Vehicle;
 use App\Models\EmergencyContact;
 use App\Models\HouseholdMember;
 use App\Models\ApplicantDocument;
+use App\Models\User;
 use App\Services\EmailService;
 use App\Http\Requests\StoreApplicationRequest;
 use Illuminate\Http\Request;
@@ -96,7 +97,11 @@ class ApplicationController extends Controller
             $consentSessionId = $sessionId;
         }
 
-        session(['consent_session_id' => $consentSessionId]);
+        session([
+            'consent_session_id' => $consentSessionId,
+            'applicant_session_id' => $sessionId,
+            'current_applicant_id' => $applicant ? $applicant->id : null,
+        ]);
 
         return Inertia::render('Application/Form', [
             'type' => 'admin',
@@ -137,7 +142,11 @@ class ApplicationController extends Controller
             $consentSessionId = $sessionId;
         }
 
-        session(['consent_session_id' => $consentSessionId]);
+        session([
+            'consent_session_id' => $consentSessionId,
+            'applicant_session_id' => $sessionId,
+            'current_applicant_id' => $applicant ? $applicant->id : null,
+        ]);
 
         return Inertia::render('Application/Form', [
             'type' => 'superadmin',
@@ -159,7 +168,7 @@ class ApplicationController extends Controller
             'property_id' => 'nullable',
             'property_name' => 'nullable|string',
             'property_type' => 'nullable|string',
-            'desired_move_date' => 'nullable|date',
+            'desired_move_date' => 'nullable|date|after_or_equal:today',
             'source' => 'nullable|string',
             'source_other' => 'nullable|string',
         ]);
@@ -199,7 +208,10 @@ class ApplicationController extends Controller
                     $draft->source_other = $request->source_other;
                 }
                 $draft->save();
-                session(['current_applicant_id' => $draft->id]);
+                session([
+                    'current_applicant_id' => $draft->id,
+                    'applicant_session_id' => $draft->session_id,
+                ]);
                 DB::commit();
 
                 return response()->json([
@@ -229,7 +241,10 @@ class ApplicationController extends Controller
                 'source_other' => $request->source_other,
             ]);
 
-            session(['current_applicant_id' => $applicant->id]);
+            session([
+                'current_applicant_id' => $applicant->id,
+                'applicant_session_id' => $applicant->session_id,
+            ]);
             DB::commit();
 
             return response()->json([
@@ -892,6 +907,11 @@ class ApplicationController extends Controller
 
             Applicant::where('id', $request->applicant_id)->update(['current_step' => 11]);
 
+            session([
+                'current_applicant_id' => $applicant->id,
+                'applicant_session_id' => $sessionId,
+            ]);
+
             return response()->json(['success' => true, 'current_step' => 11]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;
@@ -971,9 +991,15 @@ class ApplicationController extends Controller
                             'document_type'     => $doc->document_type,
                             'original_filename' => $doc->original_filename,
                             'file_url'          => $doc->url,
+                            'url'               => $doc->url,
                             'description'       => $doc->description
                         ];
                     })->values();
+
+                session([
+                    'current_applicant_id' => $applicant->id,
+                    'applicant_session_id' => $applicant->session_id,
+                ]);
 
                 return response()->json([
                     'success'        => true,
@@ -1029,10 +1055,16 @@ class ApplicationController extends Controller
                         'id'                => $doc->id,
                         'document_type'     => $doc->document_type,
                         'original_filename' => $doc->original_filename,
-                        'file_url'          => asset(Storage::url($doc->file_path)),
+                        'file_url'          => $doc->url,
+                        'url'               => $doc->url,
                         'description'       => $doc->description
                     ];
                 })->values();
+
+                session([
+                    'current_applicant_id' => $applicant->id,
+                    'applicant_session_id' => $applicant->session_id,
+                ]);
 
                 return response()->json([
                     'success'        => true,
@@ -1067,7 +1099,7 @@ class ApplicationController extends Controller
             'property_name' => 'required|string|max:255',
             'property_id' => 'nullable',
             'property_type' => 'nullable|string|max:255',
-            'desired_move_date' => 'nullable|date',
+            'desired_move_date' => 'nullable|date|after_or_equal:today',
             'source' => 'nullable|string|max:255',
             'source_other' => 'nullable|string|max:255',
         ]);
