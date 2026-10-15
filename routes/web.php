@@ -167,7 +167,7 @@ Route::get('/dashboard', function () {
                     'id' => $doc->id,
                     'name' => $doc->original_filename,
                     'type' => $doc->document_type,
-                    'url' => asset('storage/' . $doc->file_path)
+                    'url' => $doc->url
                 ]),
                 'payments' => $applicant->payments->map(fn($p) => [
                     'id' => $p->id,

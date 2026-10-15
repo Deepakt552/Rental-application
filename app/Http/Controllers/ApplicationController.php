@@ -296,7 +296,7 @@ class ApplicationController extends Controller
                 'exists' => true,
                 'is_admin' => true,
                 'has_draft' => false,
-                'message' => 'This email belongs to an administrator account and cannot be used for a rental application.'
+                'message' => 'This email has already been submitted. Please log in using your credentials.'
             ]);
         }
 

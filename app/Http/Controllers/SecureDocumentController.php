@@ -31,9 +31,12 @@ class SecureDocumentController extends Controller
                 $authorized = true;
             }
 
-            // Tenant user who owns this application is authorized
-            if (!$authorized && $user && $document->applicant && $document->applicant->user_id && (int) $document->applicant->user_id === (int) $user->id) {
-                $authorized = true;
+            // Tenant user who owns this application is authorized (by user_id or email)
+            if (!$authorized && $user && $document->applicant) {
+                if (($document->applicant->user_id && (int) $document->applicant->user_id === (int) $user->id) ||
+                    (!empty($document->applicant->email) && strtolower(trim($document->applicant->email)) === strtolower(trim($user->email ?? '')))) {
+                    $authorized = true;
+                }
             }
 
             // Active session during application flow
