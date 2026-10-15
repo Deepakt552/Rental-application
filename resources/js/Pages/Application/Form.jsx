@@ -740,6 +740,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         });
                         setErrors(mappedErrors);
                     }
+                    if (result.message) {
+                        setErrorMessage(result.message);
+                        toast.error(result.message);
+                    }
                     setIsSaving(false);
                     return false;
                 }
@@ -889,6 +893,9 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             }
             if (!formData.personal_info.email?.trim()) {
                 newErrors['personal_info.email'] = 'Email is required';
+                isValid = false;
+            } else if (errors['personal_info.email']) {
+                newErrors['personal_info.email'] = errors['personal_info.email'];
                 isValid = false;
             }
 
@@ -1051,9 +1058,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 const initResult = await initApplication(formData.personal_info.email);
                 if (!initResult.success) {
                     setErrorMessage(initResult.message || 'Failed to initialize application');
+                    setErrors(prev => ({ ...prev, [`personal_info.email`]: initResult.message }));
+                    toast.error(initResult.message || 'Failed to initialize application');
                     return;
                 }
-                currentId = initResult.data.applicant_id;
+                currentId = initResult.data?.applicant_id || initResult.applicant_id;
             }
         } else if (currentStep === 1) {
             const initResult = await initApplication(
@@ -1065,9 +1074,11 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     initResult.message ||
                     'Failed to initialize application'
                 );
+                setErrors(prev => ({ ...prev, [`personal_info.email`]: initResult.message }));
+                toast.error(initResult.message || 'Failed to initialize application');
                 return;
             }
-            currentId = initResult.data.applicant_id;
+            currentId = initResult.data?.applicant_id || initResult.applicant_id;
         }
 
         // Clear any previous error messages

@@ -176,8 +176,23 @@ class ApplicationController extends Controller
         try {
             DB::beginTransaction();
 
+            $emailClean = strtolower(trim($request->email));
+
+            // CRITICAL SECURITY CHECK: Reject any administrator email
+            $adminUserExists = User::where('email', $emailClean)
+                ->whereIn('role', ['admin', 'superadmin'])
+                ->exists();
+
+            if ($adminUserExists) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This email belongs to an administrative account and cannot be used for a rental application.'
+                ], 422);
+            }
+
             // Check submitted (non-draft) application
-            $existingSubmitted = Applicant::where('email', $request->email)
+            $existingSubmitted = Applicant::where('email', $emailClean)
                 ->where('status', '!=', 'draft')
                 ->first();
 
@@ -269,19 +284,48 @@ class ApplicationController extends Controller
     public function checkEmail(Request $request)
     {
         $request->validate(['email' => 'required|email']);
+        $email = strtolower(trim($request->email));
 
-        $exists = Applicant::where('email', $request->email)
+        // 1. Check if email belongs to an administrative account
+        $isAdmin = User::where('email', $email)
+            ->whereIn('role', ['admin', 'superadmin'])
+            ->exists();
+
+        if ($isAdmin) {
+            return response()->json([
+                'exists' => true,
+                'is_admin' => true,
+                'has_draft' => false,
+                'message' => 'This email belongs to an administrator account and cannot be used for a rental application.'
+            ]);
+        }
+
+        // 2. Check submitted application
+        $exists = Applicant::where('email', $email)
             ->where('status', '!=', 'draft')
             ->exists();
 
-        $hasDraft = Applicant::where('email', $request->email)
+        // 3. Check existing draft
+        $hasDraft = Applicant::where('email', $email)
             ->where('status', 'draft')
             ->exists();
 
+        // 4. Check if regular user account already exists
+        $userExists = User::where('email', $email)->exists();
+
+        $message = '';
+        if ($exists) {
+            $message = 'This email has already been submitted. Please log in using your credentials.';
+        } elseif ($hasDraft) {
+            $message = 'A draft already exists for this email. Please log in using your credentials to continue.';
+        } elseif ($userExists) {
+            $message = 'An account with this email already exists. Please log in using your credentials to continue.';
+        }
+
         return response()->json([
-            'exists' => $exists,
+            'exists' => $exists || $userExists,
             'has_draft' => $hasDraft,
-            'message' => $exists ? 'This email has already been submitted. Please log in using your credentials.' : ($hasDraft ? 'A draft already exists for this email. Please log in using your credentials to continue.' : '')
+            'message' => $message
         ]);
     }
 
@@ -317,6 +361,25 @@ class ApplicationController extends Controller
         try {
             DB::beginTransaction();
 
+            $emailClean = strtolower(trim($request->email));
+
+            // CRITICAL SECURITY ENFORCEMENT:
+            // Never allow an administrative email to be used for a rental application
+            $adminUserExists = User::where('email', $emailClean)
+                ->whereIn('role', ['admin', 'superadmin'])
+                ->exists();
+
+            if ($adminUserExists) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This email belongs to an administrative account and cannot be used for a rental application.',
+                    'errors' => [
+                        'email' => ['This email belongs to an administrative account and cannot be used for a rental application.']
+                    ]
+                ], 422);
+            }
+
             // 1. Save Personal Information data first to guarantee form data persistence
             PersonalInformation::updateOrCreate(
                 ['applicant_id' => $request->applicant_id],
@@ -329,7 +392,7 @@ class ApplicationController extends Controller
                     'marital_status' => $request->marital_status,
                     'date_of_birth' => $request->date_of_birth,
                     'phone' => $request->phone,
-                    'email' => strtolower(trim($request->email))
+                    'email' => $emailClean
                 ]
             );
 
@@ -356,31 +419,65 @@ class ApplicationController extends Controller
             // 3. Create or authenticate User account ONLY AFTER form data is saved successfully
             $currentUser = Auth::user();
             $userId = $currentUser ? $currentUser->id : null;
+            $isCurrentAdmin = $currentUser && ($currentUser->isAdmin() || $currentUser->isSuperAdmin());
 
-            if (!$userId) {
-                $existingUser = User::where('email', strtolower(trim($request->email)))->first();
+            if (!$userId || $isCurrentAdmin) {
+                $existingUser = User::where('email', $emailClean)->first();
 
                 if ($existingUser) {
-                    Auth::login($existingUser);
-                    $userId = $existingUser->id;
-                    if ($request->password && Hash::needsRehash($existingUser->password)) {
-                        $existingUser->update(['password' => Hash::make($request->password)]);
+                    // Extra security safety check: Verify user is not admin
+                    if ($existingUser->isAdmin() || $existingUser->isSuperAdmin()) {
+                        DB::rollBack();
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'This email belongs to an administrative account and cannot be used for a rental application.',
+                            'errors' => [
+                                'email' => ['This email belongs to an administrative account and cannot be used for a rental application.']
+                            ]
+                        ], 422);
+                    }
+
+                    // For an unauthenticated guest: they MUST supply the correct password for their existing account
+                    if (!$isCurrentAdmin) {
+                        if ($request->password && Hash::check($request->password, $existingUser->password)) {
+                            Auth::login($existingUser);
+                            $userId = $existingUser->id;
+                        } else {
+                            DB::rollBack();
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'An account with this email already exists. Please log in using your password to continue.',
+                                'errors' => [
+                                    'email' => ['An account with this email already exists. Please log in using your password to continue.']
+                                ]
+                            ], 422);
+                        }
+                    } else {
+                        // Admin is filling on behalf of tenant: associate applicant with this user id
+                        $userId = $existingUser->id;
                     }
                 } else {
-                    $user = User::create([
+                    // New user creation: strictly assign role 'user'
+                    $newUser = User::create([
                         'name' => trim($request->first_name . ' ' . $request->last_name),
-                        'email' => strtolower(trim($request->email)),
+                        'email' => $emailClean,
                         'password' => Hash::make($request->password ?? Str::random(12)),
                         'role' => 'user'
                     ]);
-                    $userId = $user->id;
-                    Auth::login($user);
+
+                    if (!$isCurrentAdmin) {
+                        Auth::login($newUser);
+                        $userId = $newUser->id;
+                    } else {
+                        // Keep admin logged in
+                        $userId = $newUser->id;
+                    }
                 }
             }
 
             // 4. Update applicant record with user_id & step
             $updateData = [
-                'email' => strtolower(trim($request->email)),
+                'email' => $emailClean,
                 'current_step' => 2
             ];
 
