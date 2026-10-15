@@ -637,16 +637,20 @@ class ConsentController extends Controller
                         ->delete();
                     // Also clean up any NULL-applicant rows sharing the same session family
                     // (created before the applicant was resolved)
-                    ConsentRecord::whereNull('applicant_id')
-                        ->where('status', 'pending')
-                        ->where('session_id', '!=', $sessionId)
-                        ->whereIn('session_id', function ($q) use ($finalApplicantId) {
-                            // session IDs previously linked to this applicant (now orphaned)
-                            $q->select('session_id')
-                              ->from('consent_records')
-                              ->where('applicant_id', $finalApplicantId);
-                        })
-                        ->delete();
+                    $linkedSessionIds = ConsentRecord::where('applicant_id', $finalApplicantId)
+                        ->pluck('session_id')
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    if (!empty($linkedSessionIds)) {
+                        ConsentRecord::whereNull('applicant_id')
+                            ->where('status', 'pending')
+                            ->where('session_id', '!=', $sessionId)
+                            ->whereIn('session_id', $linkedSessionIds)
+                            ->delete();
+                    }
                 }
 
                 // Send emails if application is also submitted
