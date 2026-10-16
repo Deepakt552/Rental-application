@@ -7,8 +7,10 @@ use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\Admin\ApplicationController as AdminApplicationController;
 use App\Http\Controllers\ConsentController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\ReminderOptOutController;
 // use App\Http\Controllers\Admin\PropertyController as AdminPropertyController;
 use Inertia\Inertia;
+
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -100,7 +102,12 @@ Route::prefix('api/application')->group(function () {
     Route::get('/{applicant}/consent/pdf', [App\Http\Controllers\ConsentController::class, 'viewPdf'])->name('application.consent.pdf')->middleware('auth');
 });
 
+// Automated Tenant Reminder Opt-out / Opt-in Routes
+Route::get('/reminders/opt-out/{applicant}', [ReminderOptOutController::class, 'optOut'])->name('reminders.opt-out');
+Route::get('/reminders/opt-in/{applicant}', [ReminderOptOutController::class, 'optIn'])->name('reminders.opt-in');
+
 use App\Models\Applicant;
+
 
 Route::get('/dashboard', function () {
     $user = auth()->user();
@@ -199,6 +206,7 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
     Route::post('/applications/{id}/resend', [AdminApplicationController::class, 'resend'])->name('admin.applications.resend');
     Route::post('/applications/{id}/send-sms', [AdminApplicationController::class, 'sendSms'])->name('admin.applications.send-sms');
     Route::post('/applications/{id}/send-email-reminder', [AdminApplicationController::class, 'sendEmailReminder'])->name('admin.applications.send-email-reminder');
+    Route::post('/applications/{id}/toggle-reminders', [AdminApplicationController::class, 'toggleReminders'])->name('admin.applications.toggle-reminders');
     Route::patch('/applications/{id}/move-in-status', [AdminApplicationController::class, 'updateMoveInStatus'])->name('admin.applications.move-in-status');
     Route::post('/applications/{id}/comment', [AdminApplicationController::class, 'updateComment'])->name('admin.applications.comment');
     Route::put('/applications/{id}/property-details', [AdminApplicationController::class, 'updatePropertyDetails'])->name('admin.applications.property-details');

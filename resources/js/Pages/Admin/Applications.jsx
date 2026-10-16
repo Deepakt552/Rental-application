@@ -6,7 +6,7 @@ import {
     Search, Eye, Trash2, Filter, FileText, CheckCircle,
     Clock, X, Users, Building2, Crown, Download,
     ArrowUp, ArrowDown, ArrowUpDown, Shield, DollarSign,
-    Calendar, RotateCcw, Home
+    Calendar, RotateCcw, Home, ChevronDown
 } from 'lucide-react';
 
 const LEAD_SOURCES = [
@@ -33,6 +33,7 @@ export default function Applications({ applicants, filters, total_admin, total_s
     const [sortBy, setSortBy] = useState(filters.sort_by || 'created_at');
     const [sortDir, setSortDir] = useState(filters.sort_dir || 'desc');
     const [updatingMoveInId, setUpdatingMoveInId] = useState(null);
+    const [focusedRowId, setFocusedRowId] = useState(null);
 
     const currentType = filters.type || null;
 
@@ -196,123 +197,141 @@ export default function Applications({ applicants, filters, total_admin, total_s
     };
 
     const statusConfig = {
-        approved:  { cls: 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', dot: 'bg-emerald-500', glow: 'shadow-emerald-100' },
-        rejected:  { cls: 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800',         dot: 'bg-rose-500',    glow: 'shadow-rose-100' },
-        submitted: { cls: 'bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-800',            dot: 'bg-sky-500',     glow: 'shadow-sky-100' },
-        draft:     { cls: 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700',       dot: 'bg-slate-400',   glow: '' },
+        approved: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30', dot: 'bg-emerald-500', glow: 'shadow-emerald-500/20' },
+        rejected: { cls: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30', dot: 'bg-rose-500', glow: 'shadow-rose-500/20' },
+        submitted: { cls: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/30', dot: 'bg-sky-500', glow: 'shadow-sky-500/20' },
+        draft: { cls: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30', dot: 'bg-amber-500', glow: '' },
     };
     const getStatus = (s) => statusConfig[s] || statusConfig.draft;
 
-    const total     = applicants.total || 0;
+    const total = applicants.total || 0;
     const submitted = submitted_count ?? (applicants.data?.filter(a => a.status === 'submitted').length || 0);
     const triumphCount = total_admin ?? (applicants.data?.filter(a => a.type === 'admin').length || 0);
     const excelCount = total_superadmin ?? (applicants.data?.filter(a => a.type === 'superadmin').length || 0);
 
     const pageTitle = currentType === 'admin' ? 'Triumph Applications'
         : currentType === 'superadmin' ? 'Excel Applications'
-        : 'All Applications';
+            : 'All Applications';
 
     // "Approved" tab removed per user request
     const STATUS_TABS = [
         { value: '', label: 'All', count: total },
         { value: 'submitted', label: 'Submitted' },
-        { value: 'draft',     label: 'Draft' },
+        { value: 'draft', label: 'Draft' },
     ];
 
     const COLS = [
-        { label: 'ID',             col: 'id',            w: 55  },
-        { label: 'Applicant',      col: 'applicant',     w: 165 },
-        { label: 'Contact',        col: 'email',         w: 175 },
-        { label: 'Property Name',  col: 'property_name', w: 170 },
-        { label: 'Source',         col: 'source',        w: 110 },
-        { label: 'Status',         col: 'status',        w: 95  },
-        { label: 'Consent',        col: 'consent_status',w: 85  },
-        { label: 'Payment',        col: 'payment_status',w: 85  },
-        { label: 'Move In Status', col: 'move_in_status',w: 140 },
-        { label: 'Date',           col: 'created_at',    w: 105 },
-        { label: 'Actions',        col: null,            w: 70  },
+        { label: 'ID', col: 'id', w: 55 },
+        { label: 'Applicant', col: 'applicant', w: 165 },
+        { label: 'Contact', col: 'email', w: 175 },
+        { label: 'Property Name', col: 'property_name', w: 170 },
+        { label: 'Source', col: 'source', w: 110 },
+        { label: 'Status', col: 'status', w: 95 },
+        { label: 'Consent', col: 'consent_status', w: 85 },
+        { label: 'Payment', col: 'payment_status', w: 85 },
+        { label: 'Move In Status', col: 'move_in_status', w: 140 },
+        { label: 'Date', col: 'created_at', w: 105 },
+        { label: 'Actions', col: null, w: 70 },
     ];
 
     const hasActiveFilters = Boolean(
         searchTerm || statusFilter || fromDate || toDate || paymentStatus || consentStatus || sourceFilter || moveInStatusFilter
     );
 
+    const detailedFilterCount = [fromDate, toDate, paymentStatus, consentStatus, sourceFilter, moveInStatusFilter].filter(Boolean).length;
+    const [showDetailedFilters, setShowDetailedFilters] = useState(detailedFilterCount > 0);
+
     return (
         <AuthenticatedLayout>
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-                <div className="w-full px-4 sm:px-6 lg:px-8 py-7">
+            <div className="min-h-screen bg-slate-50/70 dark:bg-[#0B0F17] relative">
+                {/* Subtle ambient glow in dark mode */}
+                <div className="absolute top-0 right-1/4 w-96 h-96 bg-sky-500/5 rounded-full blur-3xl pointer-events-none hidden dark:block" />
+                <div className="absolute top-64 left-1/3 w-80 h-80 bg-blue-600/5 rounded-full blur-3xl pointer-events-none hidden dark:block" />
+
+                <div className="relative w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
 
                     {/* ── Header ── */}
-                    <div className="flex items-start justify-between mb-7">
-                        <div className="flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #0e4a81, #1a6bb5)' }}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-3.5">
+                            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-[0_3px_12px_rgba(14,74,129,0.3)] dark:shadow-[0_0_15px_rgba(56,189,248,0.25)]" style={{ background: 'linear-gradient(135deg, #0e4a81, #1a6bb5)' }}>
                                 <FileText className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                                <h1 className="text-[22px] font-bold text-slate-800 dark:text-slate-100 leading-tight tracking-tight">{pageTitle}</h1>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                <div className="flex items-center gap-2.5">
+                                    <h1 className="text-xl sm:text-[22px] font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none">{pageTitle}</h1>
+                                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#e6eef7] text-[#0e4a81] border border-[#bcd3ec] dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/30 dark:shadow-[0_0_10px_rgba(56,189,248,0.15)]">
+                                        {total.toLocaleString()} total
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                                     {currentType === 'admin' ? 'Triumph rental applications' :
-                                     currentType === 'superadmin' ? 'Excel residential applications' :
-                                     'All applications across Triumph & Excel'}
+                                        currentType === 'superadmin' ? 'Excel residential applications' :
+                                            'All applications across Triumph & Excel'}
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={handleExport}
-                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:border-[#0e4a81] dark:hover:border-[#5a9bd5] hover:text-[#0e4a81] dark:hover:text-[#5a9bd5] transition-all shadow-sm"
-                        >
-                            <Download className="w-4 h-4" /> Export
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleExport}
+                                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold bg-white dark:bg-[#111827]/90 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl hover:border-[#0e4a81] hover:text-[#0e4a81] dark:hover:border-sky-500/50 dark:hover:text-sky-300 dark:hover:bg-slate-800/80 transition-all shadow-xs active:scale-95 cursor-pointer"
+                            >
+                                <Download className="w-4 h-4" /> Export CSV
+                            </button>
+                        </div>
                     </div>
 
-                    {/* ── Stats ── */}
+                    {/* ── Stats Cards (Enhanced Size & Clarity) ── */}
                     {(() => {
                         const statsCards = [
                             {
-                                label: currentType === 'admin' ? 'Triumph Applications' : (currentType === 'superadmin' ? 'Excel Applications' : 'Total Applications'),
+                                label: currentType === 'admin' ? 'Triumph Apps' : (currentType === 'superadmin' ? 'Excel Apps' : 'Total Applications'),
                                 value: total,
-                                sub: `Page ${applicants.current_page} of ${applicants.last_page}`,
                                 icon: FileText,
                                 accent: '#0e4a81',
-                                light: '#e6eef7',
+                                borderAccent: 'border-t-[#0e4a81] dark:border-t-sky-500',
+                                lightBg: '#e6eef7',
+                                darkIconStyle: 'dark:bg-sky-500/20 dark:text-sky-400 dark:border dark:border-sky-500/30',
                             },
                             {
                                 label: 'Pending Review',
                                 value: submitted,
-                                sub: 'Awaiting action',
                                 icon: Clock,
                                 accent: '#d97706',
-                                light: '#fef3c7',
+                                borderAccent: 'border-t-amber-500 dark:border-t-amber-400',
+                                lightBg: '#fef3c7',
+                                darkIconStyle: 'dark:bg-amber-500/20 dark:text-amber-400 dark:border dark:border-amber-500/30',
                             },
                             ...(currentType !== 'superadmin' ? [{
                                 label: 'Triumph Total',
                                 value: triumphCount,
-                                sub: 'Triumph type',
                                 icon: Building2,
                                 accent: '#1a6bb5',
-                                light: '#dbeafe',
+                                borderAccent: 'border-t-blue-500 dark:border-t-blue-400',
+                                lightBg: '#dbeafe',
+                                darkIconStyle: 'dark:bg-blue-500/20 dark:text-blue-400 dark:border dark:border-blue-500/30',
                             }] : []),
                             ...(currentType !== 'admin' ? [{
                                 label: 'Excel Total',
                                 value: excelCount,
-                                sub: 'Excel type',
                                 icon: Crown,
                                 accent: '#7c3aed',
-                                light: '#ede9fe',
+                                borderAccent: 'border-t-purple-500 dark:border-t-purple-400',
+                                lightBg: '#ede9fe',
+                                darkIconStyle: 'dark:bg-purple-500/20 dark:text-purple-400 dark:border dark:border-purple-500/30',
                             }] : []),
                         ];
 
                         return (
-                            <div className={`grid gap-4 mb-6 ${statsCards.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4'}`}>
-                                {statsCards.map(({ label, value, sub, icon: Icon, accent, light }) => (
-                                    <div key={label} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4 flex items-center gap-4 hover:shadow-md dark:hover:shadow-slate-900/50 transition-all">
-                                        <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: light }}>
-                                            <Icon className="w-5 h-5" style={{ color: accent }} />
+                            <div className={`grid gap-3 mb-4 ${statsCards.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
+                                {statsCards.map(({ label, value, icon: Icon, accent, borderAccent, lightBg, darkIconStyle }) => (
+                                    <div key={label} className={`bg-white dark:bg-[#111827]/90 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-xs dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] px-4 py-3 flex items-center gap-3.5 border-t-[3.5px] ${borderAccent} hover:-translate-y-0.5 hover:shadow-sm dark:hover:border-slate-700 transition-all duration-150`}>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs ${darkIconStyle}`} style={{ background: undefined }}>
+                                            <Icon className="w-5 h-5 dark:hidden" style={{ color: accent }} />
+                                            <Icon className="w-5 h-5 hidden dark:block" />
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-[22px] font-bold text-slate-800 dark:text-slate-100 leading-none">{value.toLocaleString()}</p>
-                                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 truncate">{label}</p>
-                                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>
+                                            <p className="text-[20px] font-black text-slate-900 dark:text-slate-100 leading-tight tracking-tight">{value.toLocaleString()}</p>
+                                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 truncate leading-tight mt-0.5">{label}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -320,201 +339,295 @@ export default function Applications({ applicants, filters, total_admin, total_s
                         );
                     })()}
 
-                    {/* ── Filter card ── */}
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm mb-5 overflow-hidden">
+                    {/* ── Filter & Search Bar (Sized Up & User-Friendly) ── */}
+                    <div className="bg-white dark:bg-[#111827]/90 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-xs dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] mb-3.5 overflow-hidden">
+                        {/* Unified Search, Status Tabs & Actions Bar */}
+                        <div className="p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3">
+                            {/* Status tabs */}
+                            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 border border-transparent dark:border-slate-800/80 p-1.5 rounded-xl">
+                                {STATUS_TABS.map(tab => (
+                                    <button
+                                        key={tab.value}
+                                        type="button"
+                                        onClick={() => handleStatusTabChange(tab.value)}
+                                        className={`px-4 py-2 text-xs sm:text-[13px] font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${statusFilter === tab.value
+                                            ? 'bg-white dark:bg-gradient-to-r dark:from-sky-600 dark:to-blue-600 text-[#0e4a81] dark:text-white shadow-xs dark:shadow-md dark:shadow-sky-500/20'
+                                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white dark:hover:bg-slate-800/60'
+                                            }`}
+                                    >
+                                        <span>{tab.label}</span>
+                                        {tab.count !== undefined && (
+                                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${statusFilter === tab.value
+                                                ? 'bg-[#0e4a81] text-white dark:bg-white/20 dark:text-white'
+                                                : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                                                }`}>
+                                                {tab.count}
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
 
-                        {/* Status Tabs (All, Submitted, Draft) */}
-                        <div className="flex border-b border-slate-200 dark:border-slate-700 overflow-x-auto px-1 pt-1">
-                            {STATUS_TABS.map(tab => (
-                                <button
-                                    key={tab.value}
-                                    onClick={() => handleStatusTabChange(tab.value)}
-                                    className={`relative px-5 py-2.5 text-xs font-semibold whitespace-nowrap transition-all rounded-t-lg mr-0.5 ${
-                                        statusFilter === tab.value 
-                                            ? 'text-[#0e4a81] dark:text-[#5a9bd5] border-b-2 border-[#0e4a81] dark:border-[#5a9bd5] bg-gradient-to-b from-[#e6eef7] to-[#f0f5fb] dark:from-slate-700 dark:to-slate-700/80'
-                                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                                    }`}
-                                >
-                                    {tab.label}
-                                    {tab.count !== undefined && (
-                                        <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                                            statusFilter === tab.value 
-                                                ? 'bg-[#0e4a81] dark:bg-[#5a9bd5] text-white'
-                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                                        }`}>
-                                            {tab.count}
-                                        </span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Search & Comprehensive Filters Bar */}
-                        <div className="p-4 space-y-3.5">
-                            {/* Search row */}
-                            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                            {/* Search Form + Filter Toggle Button */}
+                            <form onSubmit={handleSearch} className="flex-1 flex flex-wrap sm:flex-nowrap items-center justify-end gap-2.5 min-w-[280px]">
+                                <div className="relative flex-1 min-w-[220px] max-w-md">
+                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
                                     <input
                                         type="text"
-                                        placeholder="Search by name, email, phone, or property name/code…"
+                                        placeholder="Search applicant, email, phone, property…"
                                         value={searchTerm}
                                         onChange={e => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-[#0e4a81] dark:focus:border-[#5a9bd5] focus:ring-2 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
+                                        className="w-full pl-10 pr-9 py-2.5 text-sm bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 font-medium shadow-2xs"
                                     />
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="submit"
-                                        className="px-5 py-2 text-sm font-semibold text-white rounded-xl flex items-center gap-2 transition-all hover:opacity-90 active:scale-95 shadow-sm"
-                                        style={{ background: 'linear-gradient(135deg, #0e4a81, #1a6bb5)' }}
-                                    >
-                                        <Search className="w-3.5 h-3.5" /> Search
-                                    </button>
-                                    {hasActiveFilters && (
+                                    {searchTerm && (
                                         <button
                                             type="button"
-                                            onClick={handleResetFilters}
-                                            className="px-4 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-1.5"
+                                            onClick={() => { setSearchTerm(''); push({ search: '' }); }}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 p-0.5 cursor-pointer"
                                         >
-                                            <RotateCcw className="w-3.5 h-3.5" /> Reset
+                                            <X className="w-4 h-4" />
                                         </button>
                                     )}
                                 </div>
-                            </form>
 
-                            {/* Detailed Filter Selectors */}
-                            <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                                {/* From Date */}
-                                <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        From Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={fromDate}
-                                        onChange={(e) => setFromDate(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#0e4a81]"
-                                    />
-                                </div>
+                                <button
+                                    type="submit"
+                                    className="flex-shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold text-white rounded-xl shadow-xs dark:shadow-[0_0_15px_rgba(56,189,248,0.25)] hover:opacity-95 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+                                    style={{ background: 'linear-gradient(135deg, #0e4a81, #1a6bb5)' }}
+                                >
+                                    <Search className="w-4 h-4 flex-shrink-0 text-white" />
+                                    <span className="font-bold text-white">Search</span>
+                                </button>
 
-                                {/* To Date */}
-                                <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        To Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={toDate}
-                                        onChange={(e) => setToDate(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#0e4a81]"
-                                    />
-                                </div>
-
-                                {/* Payment Status */}
-                                <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        Payment Status
-                                    </label>
-                                    <select
-                                        value={paymentStatus}
-                                        onChange={(e) => setPaymentStatus(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#0e4a81]"
-                                    >
-                                        <option value="">All Payments</option>
-                                        <option value="paid">Paid</option>
-                                        <option value="unpaid">Unpaid</option>
-                                        <option value="pending">Pending</option>
-                                    </select>
-                                </div>
-
-                                {/* Consent Status */}
-                                <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        Consent Status
-                                    </label>
-                                    <select
-                                        value={consentStatus}
-                                        onChange={(e) => setConsentStatus(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#0e4a81]"
-                                    >
-                                        <option value="">All Consents</option>
-                                        <option value="completed">Done / Completed</option>
-                                        <option value="pending">Pending</option>
-                                    </select>
-                                </div>
-
-                                {/* Application Status */}
-                                <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        Application Status
-                                    </label>
-                                    <select
-                                        value={statusFilter}
-                                        onChange={(e) => setStatusFilter(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#0e4a81]"
-                                    >
-                                        <option value="">All Statuses</option>
-                                        <option value="submitted">Submitted</option>
-                                        <option value="draft">Draft</option>
-                                        <option value="approved">Approved</option>
-                                        <option value="rejected">Rejected</option>
-                                    </select>
-                                </div>
-
-                                {/* Source */}
-                                <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        Source
-                                    </label>
-                                    <select
-                                        value={sourceFilter}
-                                        onChange={(e) => setSourceFilter(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#0e4a81]"
-                                    >
-                                        <option value="">All Sources</option>
-                                        {LEAD_SOURCES.map(src => (
-                                            <option key={src} value={src}>{src}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Filter Action Buttons */}
-                            <div className="flex items-center justify-end gap-2 pt-1">
+                                {/* Filters Toggle */}
                                 <button
                                     type="button"
-                                    onClick={() => push()}
-                                    className="px-4 py-1.5 text-xs font-semibold text-white bg-[#0e4a81] hover:bg-[#1a5c9e] rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                                    onClick={() => setShowDetailedFilters(!showDetailedFilters)}
+                                    className={`flex-shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl border transition-colors whitespace-nowrap cursor-pointer ${showDetailedFilters || detailedFilterCount > 0
+                                        ? 'bg-blue-50 text-[#0e4a81] border-[#0e4a81] dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/40 dark:shadow-[0_0_12px_rgba(56,189,248,0.15)]'
+                                        : 'bg-white dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                        }`}
+                                    title="Toggle additional filter options"
                                 >
-                                    <Filter className="w-3.5 h-3.5" /> Apply Filters
+                                    <Filter className="w-4 h-4 flex-shrink-0" />
+                                    <span>Filters</span>
+                                    {detailedFilterCount > 0 && (
+                                        <span className="px-2 py-0.5 rounded-full bg-[#0e4a81] text-white dark:bg-sky-500 dark:text-slate-950 text-[11px] font-extrabold">
+                                            {detailedFilterCount}
+                                        </span>
+                                    )}
+                                    <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${showDetailedFilters ? 'rotate-180' : ''}`} />
                                 </button>
+
                                 {hasActiveFilters && (
                                     <button
                                         type="button"
                                         onClick={handleResetFilters}
-                                        className="px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700/60 rounded-lg transition-colors"
+                                        className="flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700 rounded-xl border border-transparent dark:border-slate-700 transition-colors whitespace-nowrap cursor-pointer"
+                                        title="Reset all filters"
                                     >
-                                        Clear All
+                                        <RotateCcw className="w-4 h-4 flex-shrink-0" />
+                                        <span>Reset</span>
                                     </button>
                                 )}
-                            </div>
+                            </form>
                         </div>
+
+                        {/* Collapsible Detailed Filters (Sized Up & Readable) */}
+                        {showDetailedFilters && (
+                            <div className="p-4 sm:p-5 bg-slate-50/90 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-3.5">
+                                    {/* From Date */}
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                                            From Date
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={fromDate}
+                                            onChange={(e) => setFromDate(e.target.value)}
+                                            className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-medium bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 shadow-2xs transition-all"
+                                        />
+                                    </div>
+
+                                    {/* To Date */}
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                                            To Date
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={toDate}
+                                            onChange={(e) => setToDate(e.target.value)}
+                                            className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-medium bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 shadow-2xs transition-all"
+                                        />
+                                    </div>
+
+                                    {/* Payment Status */}
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                                            Payment
+                                        </label>
+                                        <select
+                                            value={paymentStatus}
+                                            onChange={(e) => setPaymentStatus(e.target.value)}
+                                            className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-medium bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 shadow-2xs transition-all cursor-pointer"
+                                        >
+                                            <option value="">All Payments</option>
+                                            <option value="paid">Paid</option>
+                                            <option value="unpaid">Unpaid</option>
+                                            <option value="pending">Pending</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Consent Status */}
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                                            Consent
+                                        </label>
+                                        <select
+                                            value={consentStatus}
+                                            onChange={(e) => setConsentStatus(e.target.value)}
+                                            className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-medium bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 shadow-2xs transition-all cursor-pointer"
+                                        >
+                                            <option value="">All Consents</option>
+                                            <option value="completed">Done / Completed</option>
+                                            <option value="pending">Pending</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Application Status */}
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                                            Status
+                                        </label>
+                                        <select
+                                            value={statusFilter}
+                                            onChange={(e) => setStatusFilter(e.target.value)}
+                                            className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-medium bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 shadow-2xs transition-all cursor-pointer"
+                                        >
+                                            <option value="">All Statuses</option>
+                                            <option value="submitted">Submitted</option>
+                                            <option value="draft">Draft</option>
+                                            <option value="approved">Approved</option>
+                                            <option value="rejected">Rejected</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Move-In Status */}
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                                            Move-In
+                                        </label>
+                                        <select
+                                            value={moveInStatusFilter}
+                                            onChange={(e) => setMoveInStatusFilter(e.target.value)}
+                                            className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-medium bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 shadow-2xs transition-all cursor-pointer"
+                                        >
+                                            <option value="">All Move-In</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="moved_in">Moved In</option>
+                                            <option value="denied">Denied</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Source */}
+                                    <div>
+                                        <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                                            Source
+                                        </label>
+                                        <select
+                                            value={sourceFilter}
+                                            onChange={(e) => setSourceFilter(e.target.value)}
+                                            className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-medium bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e4a81] focus:ring-2 focus:ring-[#0e4a81]/15 dark:focus:border-sky-500 dark:focus:ring-sky-500/20 shadow-2xs transition-all cursor-pointer"
+                                        >
+                                            <option value="">All Sources</option>
+                                            {LEAD_SOURCES.map(src => (
+                                                <option key={src} value={src}>{src}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3 mt-4 pt-3.5 border-t border-slate-200 dark:border-slate-800">
+                                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                        {detailedFilterCount > 0 ? (
+                                            <span className="inline-flex items-center gap-1.5 text-[#0e4a81] dark:text-sky-400 font-bold">
+                                                <span className="w-2 h-2 rounded-full bg-[#0e4a81] dark:bg-sky-400 animate-pulse"></span>
+                                                {detailedFilterCount} filter{detailedFilterCount > 1 ? 's' : ''} applied
+                                            </span>
+                                        ) : (
+                                            <span>No extra filters applied</span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        {detailedFilterCount > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={handleResetFilters}
+                                                className="px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-200/90 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl border border-transparent dark:border-slate-700 transition-all cursor-pointer"
+                                            >
+                                                Clear Filters
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => push()}
+                                            className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white rounded-xl transition-all flex items-center gap-2 shadow-xs dark:shadow-[0_0_15px_rgba(56,189,248,0.25)] active:scale-95 hover:opacity-95 cursor-pointer"
+                                            style={{ background: 'linear-gradient(135deg, #0e4a81, #1a6bb5)' }}
+                                        >
+                                            <Filter className="w-4 h-4" /> Apply Filters
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* ── Table card ── */}
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                    <div className="bg-white dark:bg-[#111827]/90 rounded-2xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-sm dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
 
                         {/* Table meta row */}
-                        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-700/50">
+                        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-[#0d1527] dark:to-[#111827]">
                             <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[#0e4a81] to-[#1a6bb5]" />
+                                <div className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[#0e4a81] to-[#1a6bb5] dark:from-sky-400 dark:to-blue-600" />
                                 <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                                    Showing <span className="text-[#0e4a81] dark:text-[#5a9bd5]">{applicants.from || 0}–{applicants.to || 0}</span> of <span className="text-[#0e4a81] dark:text-[#5a9bd5]">{total.toLocaleString()}</span> records
+                                    Showing <span className="text-[#0e4a81] dark:text-sky-400 font-bold">{applicants.from || 0}–{applicants.to || 0}</span> of <span className="text-[#0e4a81] dark:text-sky-400 font-bold">{total.toLocaleString()}</span> records
                                 </span>
                                 {currentType && (
-                                    <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-[#0e4a81]">
+                                    <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-[#0e4a81] dark:bg-sky-600">
                                         {currentType === 'admin' ? 'Triumph' : 'Excel'}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Status Color Guide & Row Focus Indicator */}
+                            <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                                <span className="hidden md:inline-flex items-center gap-1.5 font-medium">
+                                    <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 dark:shadow-[0_0_8px_rgba(56,189,248,0.5)]"></span> Submitted
+                                </span>
+                                <span className="hidden md:inline-flex items-center gap-1.5 font-medium">
+                                    <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 dark:shadow-[0_0_8px_rgba(251,191,36,0.5)]"></span> Draft
+                                </span>
+                                <span className="hidden md:inline-flex items-center gap-1.5 font-medium">
+                                    <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 dark:shadow-[0_0_8px_rgba(244,63,94,0.5)]"></span> Opted Out
+                                </span>
+                                {focusedRowId ? (
+                                    <div className="flex items-center gap-2 pl-2 border-l border-slate-300 dark:border-slate-700">
+                                        <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-blue-100 text-blue-800 dark:bg-sky-500/20 dark:text-sky-300 shadow-sm border border-blue-200 dark:border-sky-500/30">
+                                            Row #{focusedRowId} focused
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFocusedRowId(null)}
+                                            className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 underline cursor-pointer"
+                                        >
+                                            Clear focus
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <span className="text-[10px] text-slate-400 dark:text-slate-500 italic hidden sm:inline">
+                                        (Click any row to pin focus)
                                     </span>
                                 )}
                             </div>
@@ -523,13 +636,13 @@ export default function Applications({ applicants, filters, total_admin, total_s
                         <div className="overflow-x-auto">
                             <table className="w-full text-left" style={{ minWidth: 1050 }}>
                                 <thead>
-                                    <tr className="bg-slate-50 dark:bg-slate-700/50">
+                                    <tr className="bg-slate-100/90 dark:bg-[#0d1527] border-b-2 border-slate-300 dark:border-slate-800">
                                         {COLS.map(({ label, col, w }) => (
                                             <th
                                                 key={label || 'act'}
                                                 style={{ width: w, minWidth: w }}
                                                 onClick={() => col && handleSort(col)}
-                                                className={`px-3.5 py-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap select-none border-b border-slate-200 dark:border-slate-700 ${col ? 'cursor-pointer hover:text-[#0e4a81] dark:hover:text-[#5a9bd5] transition-colors' : ''}`}
+                                                className={`px-3.5 py-3.5 text-[11px] font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider whitespace-nowrap select-none border-b border-slate-300 dark:border-slate-800 ${col ? 'cursor-pointer hover:text-[#0e4a81] dark:hover:text-sky-400 transition-colors' : ''}`}
                                             >
                                                 <div className={`inline-flex items-center gap-1.5 ${label === 'Actions' ? 'justify-end w-full' : ''}`}>
                                                     <span>{label}</span>
@@ -545,6 +658,41 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                         const initials = [a.personal_information?.first_name?.[0], a.personal_information?.last_name?.[0]].filter(Boolean).join('') || '?';
                                         const isTriumph = a.type === 'admin';
                                         const isEven = idx % 2 === 0;
+                                        const isOptedOut = Boolean(a.reminders_opted_out);
+                                        const isFocused = focusedRowId === a.id;
+                                        const isSubmitted = a.status === 'submitted';
+
+                                        // Prominent Left Status Stripe
+                                        let borderAccent = 'border-l-[5px] ';
+                                        if (isFocused) {
+                                            borderAccent += 'border-l-blue-600 dark:border-l-sky-400 ';
+                                        } else if (isOptedOut) {
+                                            borderAccent += 'border-l-rose-500 dark:border-l-rose-400 ';
+                                        } else if (isSubmitted) {
+                                            borderAccent += 'border-l-sky-500 dark:border-l-sky-400 ';
+                                        } else if (a.status === 'approved') {
+                                            borderAccent += 'border-l-emerald-500 dark:border-l-emerald-400 ';
+                                        } else if (a.status === 'rejected') {
+                                            borderAccent += 'border-l-rose-500 dark:border-l-rose-400 ';
+                                        } else {
+                                            borderAccent += 'border-l-amber-500 dark:border-l-amber-400 ';
+                                        }
+
+                                        // High-clarity alternating row striping:
+                                        // Light: Row A (White), Row B (#eef4fb)
+                                        // Dark: Row A (#111827), Row B (#141d2d/60)
+                                        let rowBg = '';
+                                        if (isFocused) {
+                                            rowBg = 'bg-[#dbeafe] dark:bg-sky-950/80 ring-2 ring-inset ring-blue-500 dark:ring-sky-400 shadow-sm !opacity-100';
+                                        } else if (isOptedOut) {
+                                            rowBg = isEven
+                                                ? 'bg-white dark:bg-[#111827] opacity-60 hover:opacity-100 grayscale-[25%] hover:grayscale-0 hover:bg-[#dbeafe]/70 dark:hover:bg-slate-800/70'
+                                                : 'bg-[#eef4fb] dark:bg-[#141d2d]/60 opacity-60 hover:opacity-100 grayscale-[25%] hover:grayscale-0 hover:bg-[#dbeafe]/70 dark:hover:bg-slate-800/70';
+                                        } else {
+                                            rowBg = isEven
+                                                ? 'bg-white dark:bg-[#111827] hover:bg-[#dbeafe]/70 dark:hover:bg-slate-800/70'
+                                                : 'bg-[#eef4fb] dark:bg-[#141d2d]/60 hover:bg-[#dbeafe]/70 dark:hover:bg-slate-800/70';
+                                        }
 
                                         // Resolve Property Name chosen by applicant
                                         const chosenPropertyName = a.property_name || a.property?.property_name || '—';
@@ -561,49 +709,65 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                         return (
                                             <tr
                                                 key={a.id}
-                                                className={`border-b border-slate-200 dark:border-slate-700 transition-all duration-150 hover:bg-blue-50/40 dark:hover:bg-slate-700/50 ${
-                                                    isEven ? 'bg-white dark:bg-slate-800' : 'bg-slate-50/50 dark:bg-slate-800/60'
-                                                }`}
+                                                onClick={(e) => {
+                                                    if (e.target.closest('button, a, select, input')) return;
+                                                    setFocusedRowId(prev => prev === a.id ? null : a.id);
+                                                }}
+                                                title="Click anywhere on row to pin focus highlight"
+                                                className={`group border-b border-slate-200 dark:border-slate-800/70 cursor-pointer transition-all duration-150 ${borderAccent} ${rowBg}`}
                                             >
                                                 {/* ID */}
                                                 <td className="px-3.5 py-3.5">
-                                                    <span className="text-[11px] font-mono font-semibold text-slate-400 dark:text-slate-500">#{a.id}</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">#{a.id}</span>
+                                                        {isFocused && (
+                                                            <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-sky-400 animate-pulse shadow-sm" title="Row focused" />
+                                                        )}
+                                                    </div>
                                                 </td>
 
                                                 {/* Applicant */}
                                                 <td className="px-3.5 py-3.5">
                                                     <div className="flex items-center gap-2.5">
                                                         <div
-                                                            className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-sm"
-                                                            style={isTriumph
-                                                                ? { background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)', color: '#1d4ed8' }
-                                                                : { background: 'linear-gradient(135deg, #ede9fe, #ddd6fe)', color: '#6d28d9' }
-                                                            }
+                                                            className={`w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-xs ring-1 ring-black/10 dark:ring-white/10 group-hover:scale-105 transition-transform duration-150 ${
+                                                                isTriumph
+                                                                    ? 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 dark:from-sky-950/90 dark:to-blue-900/80 dark:text-sky-300 dark:ring-sky-500/30'
+                                                                    : 'bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 dark:from-purple-950/90 dark:to-indigo-900/80 dark:text-purple-300 dark:ring-purple-500/30'
+                                                            }`}
                                                         >
                                                             {initials}
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-tight truncate max-w-[140px]">
+                                                            <p className="text-[13px] font-bold text-slate-900 dark:text-white leading-tight truncate max-w-[145px]">
                                                                 {a.personal_information?.first_name} {a.personal_information?.last_name}
                                                             </p>
+                                                            {isOptedOut && (
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30 whitespace-nowrap"
+                                                                    title="Tenant has deactivated automated email reminders"
+                                                                >
+                                                                    Reminders Opted Out
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>
 
                                                 {/* Contact */}
                                                 <td className="px-3.5 py-3.5">
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[170px]" title={a.email || ''}>{a.email || '—'}</p>
-                                                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{a.personal_information?.phone || '—'}</p>
+                                                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[170px]" title={a.email || ''}>{a.email || '—'}</p>
+                                                    <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{a.personal_information?.phone || '—'}</p>
                                                 </td>
 
-                                                {/* Property Name (Chosen by applicant - Not Triumph/Excel badge) */}
+                                                {/* Property Name */}
                                                 <td className="px-3.5 py-3.5">
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[165px]" title={chosenPropertyName}>
+                                                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate max-w-[165px]" title={chosenPropertyName}>
                                                             {chosenPropertyName}
                                                         </span>
                                                         {resolvedPropertyCode && (
-                                                            <span className="text-[10px] font-mono font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
+                                                            <span className="text-[10px] font-mono font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
                                                                 Code: {resolvedPropertyCode}
                                                             </span>
                                                         )}
@@ -612,7 +776,7 @@ export default function Applications({ applicants, filters, total_admin, total_s
 
                                                 {/* Source */}
                                                 <td className="px-3.5 py-3.5">
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 truncate max-w-[110px]" title={resolvedSource}>
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300/70 dark:border-slate-700 truncate max-w-[110px]" title={resolvedSource}>
                                                         {resolvedSource}
                                                     </span>
                                                 </td>
@@ -628,11 +792,11 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                 {/* Consent */}
                                                 <td className="px-3.5 py-3.5">
                                                     {a.consent_record?.status === 'completed' || a.consent_status === 'completed' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400">
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
                                                             <Shield className="w-3 h-3" /> Done
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">
                                                             <Shield className="w-3 h-3" /> Pending
                                                         </span>
                                                     )}
@@ -641,11 +805,11 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                 {/* Payment */}
                                                 <td className="px-3.5 py-3.5">
                                                     {a.payment_status === 'paid' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400">
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
                                                             <DollarSign className="w-3 h-3" /> Paid
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30">
                                                             <DollarSign className="w-3 h-3" /> Unpaid
                                                         </span>
                                                     )}
@@ -658,13 +822,12 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                             value={moveInVal}
                                                             disabled={updatingMoveInId === a.id}
                                                             onChange={(e) => handleMoveInStatusChange(a.id, e.target.value)}
-                                                            className={`text-[11px] font-bold py-1 px-2 rounded-lg border focus:outline-none transition-colors cursor-pointer w-[125px] ${
-                                                                moveInVal === 'moved_in'
-                                                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700'
-                                                                    : moveInVal === 'denied'
-                                                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-700'
-                                                                    : 'bg-slate-50 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600'
-                                                            }`}
+                                                            className={`text-[11px] font-bold py-1 px-2 rounded-lg border focus:outline-none transition-colors cursor-pointer w-[125px] ${moveInVal === 'moved_in'
+                                                                ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
+                                                                : moveInVal === 'denied'
+                                                                    ? 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/40'
+                                                                    : 'bg-white dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                                                }`}
                                                         >
                                                             <option value="">-- Pending --</option>
                                                             <option value="moved_in">Moved In</option>
@@ -679,10 +842,10 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                 {/* Date */}
                                                 <td className="px-3.5 py-3.5">
                                                     <div className="flex flex-col">
-                                                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                                                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
                                                             {new Date(a.created_at).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: '2-digit', year: 'numeric' })}
                                                         </span>
-                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap font-mono mt-0.5">
+                                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap font-mono mt-0.5">
                                                             {new Date(a.created_at).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: true })}
                                                         </span>
                                                     </div>
@@ -693,7 +856,7 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                     <div className="flex items-center justify-end gap-1">
                                                         <Link
                                                             href={`/admin/applications/${a.id}`}
-                                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-[#0e4a81] dark:hover:text-[#5a9bd5] transition-colors bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-white hover:bg-[#0e4a81] dark:hover:bg-sky-600 border border-slate-300/80 dark:border-slate-700 transition-colors bg-white dark:bg-slate-800/90 shadow-2xs cursor-pointer"
                                                             title="View"
                                                         >
                                                             <Eye className="w-3.5 h-3.5" />
@@ -703,7 +866,7 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                                 const fullName = [a.personal_information?.first_name, a.personal_information?.last_name].filter(Boolean).join(' ') || 'Unknown Applicant';
                                                                 handleDelete(a.id, fullName);
                                                             }}
-                                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-white hover:bg-rose-600 border border-slate-300/80 dark:border-slate-700 transition-colors bg-white dark:bg-slate-800/90 shadow-2xs cursor-pointer"
                                                             title="Delete"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" />
@@ -718,10 +881,10 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                         <tr>
                                             <td colSpan="11" className="py-20 text-center">
                                                 <div className="flex flex-col items-center gap-3">
-                                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-700">
-                                                        <Users className="w-7 h-7 text-[#0e4a81] dark:text-[#5a9bd5]" />
+                                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 border border-transparent dark:border-slate-700">
+                                                        <Users className="w-7 h-7 text-[#0e4a81] dark:text-sky-400" />
                                                     </div>
-                                                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">No applications found</p>
+                                                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No applications found</p>
                                                     <p className="text-xs text-slate-400 dark:text-slate-500">Try adjusting your search or filters</p>
                                                 </div>
                                             </td>
@@ -733,17 +896,17 @@ export default function Applications({ applicants, filters, total_admin, total_s
 
                         {/* ── Pagination ── */}
                         {applicants.links && applicants.links.length > 3 && applicants.data?.length > 0 && (
-                            <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-700/30">
-                                <p className="text-xs text-slate-500 dark:text-slate-400 order-2 sm:order-1">
-                                    Page <span className="font-bold text-slate-700 dark:text-slate-300">{applicants.current_page}</span> of <span className="font-bold text-slate-700 dark:text-slate-300">{applicants.last_page}</span>
-                                    <span className="ml-2 text-slate-400 dark:text-slate-500">· {total.toLocaleString()} total</span>
+                            <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/80 dark:bg-[#0d1527]/90">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 order-2 sm:order-1 font-medium">
+                                    Page <span className="font-bold text-slate-800 dark:text-slate-200">{applicants.current_page}</span> of <span className="font-bold text-slate-800 dark:text-slate-200">{applicants.last_page}</span>
+                                    <span className="ml-2 text-slate-400 dark:text-slate-500">· {total.toLocaleString()} total applications</span>
                                 </p>
-                                <div className="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center">
+                                <div className="flex items-center gap-1.5 order-1 sm:order-2 flex-wrap justify-center">
                                     {applicants.links.map((link, i) => {
                                         if (link.label === '...') return <span key={i} className="px-2 text-slate-300 dark:text-slate-500 text-xs">…</span>;
                                         let label = link.label
-                                            .replace('&laquo; Previous', '←')
-                                            .replace('Next &raquo;', '→');
+                                            .replace('&laquo; Previous', '← Prev')
+                                            .replace('Next &raquo;', 'Next →');
                                         let pageUrl = link.url;
                                         if (pageUrl && currentType) {
                                             const u = new URL(pageUrl, window.location.origin);
@@ -755,13 +918,12 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                 key={i}
                                                 onClick={() => handlePageChange(pageUrl)}
                                                 disabled={!link.url}
-                                                className={`min-w-[32px] h-8 px-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center ${
-                                                    link.active
-                                                        ? 'bg-gradient-to-r from-[#0e4a81] to-[#1a6bb5] text-white shadow-md dark:shadow-slate-900/30'
-                                                        : link.url
-                                                        ? 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'
-                                                        : 'text-slate-300 dark:text-slate-600 cursor-not-allowed bg-white dark:bg-slate-700'
-                                                }`}
+                                                className={`min-w-[32px] h-8 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${link.active
+                                                    ? 'bg-gradient-to-r from-[#0e4a81] to-[#1a6bb5] dark:from-sky-500 dark:to-blue-600 text-white shadow-xs dark:shadow-md dark:shadow-sky-500/20'
+                                                    : link.url
+                                                        ? 'bg-white dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-[#0e4a81] hover:text-[#0e4a81] hover:bg-slate-50 dark:hover:bg-slate-700 dark:hover:text-white dark:hover:border-slate-600 shadow-2xs'
+                                                        : 'text-slate-300 dark:text-slate-600 cursor-not-allowed bg-slate-50 dark:bg-slate-900/50'
+                                                    }`}
                                             >
                                                 {label}
                                             </button>
