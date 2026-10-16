@@ -12,6 +12,19 @@
 
         <link id="favicon" rel="icon" type="image/png" href="/Triumph Logo.png">
         <script>
+            // Immediately apply saved or system theme to prevent flash of unstyled content
+            (function() {
+                try {
+                    const savedTheme = localStorage.getItem('theme');
+                    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                } catch (e) {}
+            })();
+        </script>
+        <script>
             function updateFavicon(event) {
                 const link = document.getElementById('favicon');
                 let isExcel = window.location.href.toLowerCase().includes('excel');

@@ -482,4 +482,158 @@ class EmailService
             return false;
         }
     }
+
+    /**
+     * Send tenant reminder email (automated or manual) to complete application / consent / payment
+     */
+    public function sendTenantReminder(
+        Applicant $applicant,
+        ?string $customSubject = null,
+        ?string $customMessage = null,
+        int $reminderNumber = 1,
+        bool $isAuto = false
+    ): bool {
+        if (!$this->isEmailEnabled()) {
+            Log::info("Email notifications are globally disabled. Skipping sendTenantReminder for Applicant #{$applicant->id}");
+            return false;
+        }
+
+        // If tenant opted out, do not send
+        if ($applicant->reminders_opted_out) {
+            Log::info("Skipping reminder for Applicant #{$applicant->id}: Tenant opted out of automated reminders.");
+            return false;
+        }
+
+        $email = trim($applicant->email ?: ($applicant->personalInformation?->email ?? ''));
+        if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Log::warning("Cannot send tenant reminder for Applicant #{$applicant->id}: No valid email found.");
+            return false;
+        }
+
+        $firstName = $applicant->personalInformation?->first_name ?? 'Applicant';
+        $lastName = $applicant->personalInformation?->last_name ?? '';
+        $recipientName = trim("{$firstName} {$lastName}") ?: 'Applicant';
+
+        $formType = $applicant->type ?? 'admin';
+        $isExcel = ($formType === 'superadmin' || str_contains(strtolower($applicant->company_name ?? ''), 'excel'));
+        $brandName = $isExcel ? 'Excel Residential Services' : 'Triumph Residential Services';
+        $propertyName = $applicant->property_name ?: 'your selected property';
+
+        $isConsentCompleted = $applicant->is_consent_completed;
+        $isPaymentCompleted = in_array(strtolower($applicant->payment_status ?? ''), ['paid', 'completed']);
+        $isAppCompleted = in_array(strtolower($applicant->status ?? ''), ['submitted', 'approved']);
+
+        // Determine missing items
+        $missingItems = [];
+        if (!$isConsentCompleted) {
+            $missingItems[] = 'Tenant Consent & Background Check Authorization';
+        }
+        if (!$isPaymentCompleted) {
+            $missingItems[] = 'Screening Application Fee Payment';
+        }
+        if (!$isAppCompleted) {
+            $missingItems[] = 'Application Form Details & Required Documents';
+        }
+
+        // Direct action URL
+        $actionUrl = null;
+        if (!$isConsentCompleted) {
+            $actionUrl = $isExcel ? url('/consent/excel') : url('/consent');
+        } elseif (!$isPaymentCompleted) {
+            $actionUrl = url('/dashboard');
+        } else {
+            $actionUrl = $isExcel
+                ? url('/rental-application-excel?applicant_id=' . $applicant->id)
+                : url('/rental-application?applicant_id=' . $applicant->id);
+        }
+
+        $loginUrl = url('/login');
+        $token = $applicant->getReminderOptOutToken();
+        $optOutUrl = route('reminders.opt-out', ['applicant' => $applicant->id, 'token' => $token]);
+
+        $stagePrefix = $reminderNumber >= 3 ? 'Final Reminder (3 of 3)' : "Reminder ({$reminderNumber} of 3)";
+
+        // Set subject
+        if (!empty($customSubject)) {
+            $subject = $customSubject;
+        } else {
+            if (!$isConsentCompleted) {
+                $subject = "{$stagePrefix}: Complete Your Consent Form - {$brandName}";
+            } elseif (!$isPaymentCompleted) {
+                $subject = "{$stagePrefix}: Application Fee Pending - {$brandName}";
+            } else {
+                $subject = "{$stagePrefix}: Incomplete Application Notice - {$brandName}";
+            }
+        }
+
+        // Set message body
+        if (!empty($customMessage)) {
+            $messageBody = $customMessage;
+        } else {
+            $bulletPoints = !empty($missingItems) ? ("\n• " . implode("\n• ", $missingItems)) : '';
+            $messageBody = "This is a friendly follow-up ({$stagePrefix}) regarding your rental application for {$propertyName}.\n\n"
+                . "We noticed the following item(s) are still pending to complete your file:{$bulletPoints}\n\n"
+                . "Please click the button below to complete the remaining steps, or log in to your tenant account using your registered email ({$email}) at any time.\n\n"
+                . ($reminderNumber >= 3 
+                    ? "This is our final scheduled reminder for this application. If you have any questions or require assistance, please feel free to reach out to our leasing office." 
+                    : "This reminder was automatically generated. A total of up to 3 reminders will be sent 24 hours apart until your submission is completed.");
+        }
+
+        try {
+            Mail::send('emails.tenant-reminder', [
+                'applicant' => $applicant,
+                'subject' => $subject,
+                'messageBody' => $messageBody,
+                'actionUrl' => $actionUrl,
+                'loginUrl' => $loginUrl,
+                'optOutUrl' => $optOutUrl,
+                'reminderNumber' => $reminderNumber,
+                'formType' => $formType,
+                'brandName' => $brandName,
+                'isExcel' => $isExcel,
+                'missingItems' => $missingItems,
+            ], function ($m) use ($email, $subject, $brandName) {
+                $m->to($email)
+                  ->subject($subject);
+            });
+
+            // Log Success in email_logs
+            EmailLog::create([
+                'applicant_id' => $applicant->id,
+                'recipient_email' => $email,
+                'recipient_name' => $recipientName,
+                'recipient_type' => 'user',
+                'subject' => $subject,
+                'message' => $messageBody,
+                'status' => 'sent',
+                'sent_at' => now(),
+            ]);
+
+            // Update applicant reminder metadata
+            $applicant->increment('reminder_sent_count');
+            $applicant->update([
+                'last_reminder_sent_at' => now(),
+            ]);
+
+            Log::info("Tenant reminder ({$reminderNumber}/3) sent successfully to {$email} for Applicant #{$applicant->id}.");
+            return true;
+        } catch (\Throwable $e) {
+            // Log Failure in email_logs
+            EmailLog::create([
+                'applicant_id' => $applicant->id,
+                'recipient_email' => $email,
+                'recipient_name' => $recipientName,
+                'recipient_type' => 'user',
+                'subject' => $subject,
+                'message' => $messageBody,
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+                'sent_at' => now(),
+            ]);
+
+            Log::error("Failed to send tenant reminder to {$email} for Applicant #{$applicant->id}: " . $e->getMessage());
+            return false;
+        }
+    }
 }
+

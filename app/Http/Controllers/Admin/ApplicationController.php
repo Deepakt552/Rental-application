@@ -21,11 +21,14 @@ class ApplicationController extends Controller
 
     public function dashboard()
     {
-        // Get only latest 5 applicants for the dashboard overview
+        // Get latest applicants for the dashboard overview with essential relationships
         $applicants = Applicant::with([
             'personalInformation',
             'currentAddress',
-        ])->latest()->limit(5)->get();
+            'consentRecord',
+            'payments',
+            'property',
+        ])->latest()->limit(8)->get();
 
         $emailStats = $this->emailService->getEmailStats();
 
@@ -66,9 +69,9 @@ class ApplicationController extends Controller
             ->where('created_at', '>=', now()->subDays(30))
             ->sum('amount');
 
-        $recentPaymentsList = \App\Models\Payment::with(['applicant.personalInformation'])
+        $recentPaymentsList = \App\Models\Payment::with(['applicant.personalInformation', 'applicant.property'])
             ->latest()
-            ->limit(5)
+            ->limit(6)
             ->get();
 
         // Calculate dynamic growth/change metrics
@@ -119,8 +122,10 @@ class ApplicationController extends Controller
             $query->where('status', 'completed');
         })->count();
 
+        $totalAppsCount = Applicant::count();
+
         $stats = [
-            'total_applications' => Applicant::count(),
+            'total_applications' => $totalAppsCount,
             'recent_applications' => $current7DaysApps,
             'total_emails_sent' => $emailStats['total_sent'],
             'admin_emails' => $emailStats['admin_emails'],
@@ -130,8 +135,20 @@ class ApplicationController extends Controller
             'total_consents' => $completedConsentsCount,
             'total_documents' => \App\Models\ApplicantDocument::count(),
             'applications_submitted' => Applicant::where('status', 'submitted')->count(),
+            'applications_draft' => Applicant::where('status', 'draft')->count(),
+            'applications_approved' => Applicant::where('status', 'approved')->count(),
+            'applications_rejected' => Applicant::where('status', 'rejected')->count(),
             'pending_consents' => $pendingConsentsCount,
             'pending_payments' => \App\Models\Payment::where('status', 'pending')->count(),
+            'completed_payments' => \App\Models\Payment::where('status', 'completed')->count(),
+            'paid_applicants_count' => Applicant::where('payment_status', 'paid')->count(),
+            'triumph_total' => Applicant::where('type', 'admin')->count(),
+            'excel_total' => Applicant::where('type', 'superadmin')->count(),
+            'opted_out_count' => Applicant::where('reminders_opted_out', true)->count(),
+            'moved_in_count' => Applicant::where('move_in_status', 'moved_in')->count(),
+            'move_in_pending_count' => Applicant::where('move_in_status', 'pending')->count(),
+            'submission_rate' => $totalAppsCount > 0 ? round((Applicant::where('status', 'submitted')->count() / $totalAppsCount) * 100, 1) : 0,
+            'consent_rate' => $totalAppsCount > 0 ? round(($completedConsentsCount / $totalAppsCount) * 100, 1) : 0,
             'applications_growth' => $applicationsGrowth,
             'recent_applications_growth' => $recentApplicationsGrowth,
             'revenue_growth' => $revenueGrowth,
@@ -399,82 +416,55 @@ class ApplicationController extends Controller
 
         $applicant = Applicant::with(['personalInformation'])->findOrFail($id);
 
+        if ($applicant->reminders_opted_out) {
+            return redirect()->back()->withErrors([
+                'email_error' => 'Cannot send reminder: This tenant has opted out / deactivated email reminders.'
+            ]);
+        }
+
         $email = trim($request->email);
+
         $subject = trim($request->subject);
         $messageBody = trim($request->message);
 
-        $formType = $applicant->type ?? 'admin';
-        $isExcel = ($formType === 'superadmin' || str_contains(strtolower($applicant->company_name ?? ''), 'excel'));
-        $brandName = $isExcel ? 'Excel Residential Services' : 'Triumph Residential Services';
-
-        // Direct action URL to help applicant complete remaining step
-        $actionUrl = null;
-        if (!$applicant->is_consent_completed) {
-            $actionUrl = $isExcel ? url('/consent/excel') : url('/consent');
-        } elseif ($applicant->payment_status !== 'paid' && $applicant->payment_status !== 'completed') {
-            $actionUrl = $isExcel
-                ? url('/rental-application-excel?applicant_id=' . $applicant->id)
-                : url('/rental-application?applicant_id=' . $applicant->id);
-        } else {
-            $actionUrl = $isExcel
-                ? url('/rental-application-excel?applicant_id=' . $applicant->id)
-                : url('/rental-application?applicant_id=' . $applicant->id);
+        // Update email if different from stored
+        if (!empty($email) && $applicant->email !== $email) {
+            $applicant->email = $email;
         }
 
-        try {
-            Mail::send('emails.tenant-reminder', [
-                'applicant' => $applicant,
-                'subject' => $subject,
-                'messageBody' => $messageBody,
-                'actionUrl' => $actionUrl,
-                'formType' => $formType,
-                'brandName' => $brandName,
-            ], function ($m) use ($email, $subject, $brandName) {
-                $m->to($email)
-                  ->subject($subject);
-            });
+        $success = $this->emailService->sendTenantReminder(
+            $applicant,
+            $subject,
+            $messageBody,
+            ($applicant->reminder_sent_count ?? 0) + 1,
+            false
+        );
 
-            // Log email in email_logs table
-            \App\Models\EmailLog::create([
-                'applicant_id' => $applicant->id,
-                'recipient_email' => $email,
-                'recipient_name' => trim(($applicant->personalInformation?->first_name ?? '') . ' ' . ($applicant->personalInformation?->last_name ?? '')),
-                'recipient_type' => 'user',
-                'subject' => $subject,
-                'message' => $messageBody,
-                'status' => 'sent',
-                'sent_at' => now(),
-            ]);
-
-            $applicant->update([
-                'reminder_sent_count' => ($applicant->reminder_sent_count ?? 0) + 1,
-                'last_reminder_sent_at' => now(),
-            ]);
-
+        if ($success) {
             return redirect()->back()->with('success', "Email reminder sent successfully to {$email}!");
-        } catch (\Throwable $e) {
-            Log::error('Send tenant email reminder error: ' . $e->getMessage(), [
-                'applicant_id' => $applicant->id,
-                'email' => $email,
-            ]);
-
-            \App\Models\EmailLog::create([
-                'applicant_id' => $applicant->id,
-                'recipient_email' => $email,
-                'recipient_name' => trim(($applicant->personalInformation?->first_name ?? '') . ' ' . ($applicant->personalInformation?->last_name ?? '')),
-                'recipient_type' => 'user',
-                'subject' => $subject,
-                'message' => $messageBody,
-                'status' => 'failed',
-                'error_message' => $e->getMessage(),
-                'sent_at' => now(),
-            ]);
-
-            return redirect()->back()->withErrors([
-                'email_error' => 'Failed to send email reminder: ' . $e->getMessage()
-            ]);
         }
+
+        return redirect()->back()->withErrors([
+            'email_error' => "Failed to send email reminder to {$email}. Please verify SMTP settings and email address."
+        ]);
     }
+
+    /**
+     * Toggle automated reminders status (deactivate or reactivate) by admin
+     */
+    public function toggleReminders(Request $request, $id)
+    {
+        $applicant = Applicant::findOrFail($id);
+        $newState = !$applicant->reminders_opted_out;
+        $applicant->update([
+            'reminders_opted_out' => $newState,
+            'reminder_opt_out_at' => $newState ? now() : null,
+        ]);
+
+        $statusText = $newState ? 'deactivated' : 're-activated';
+        return redirect()->back()->with('success', "Automated reminders successfully {$statusText} for Applicant #{$applicant->id}.");
+    }
+
 
     public function resend($id)
     {

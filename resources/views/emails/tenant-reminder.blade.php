@@ -1,12 +1,16 @@
 @php
     $isExcel = (isset($applicant) && (($applicant->type ?? '') === 'superadmin' || str_contains(strtolower($applicant->company_name ?? ''), 'excel')));
-    $brandName = $isExcel ? 'Excel Residential Services' : 'Triumph Residential Services';
+    $brandName = $brandName ?? ($isExcel ? 'Excel Residential Services' : 'Triumph Residential Services');
     $primaryColor = $isExcel ? '#16a34a' : '#0e4a81';
     $secondaryColor = $isExcel ? '#15803d' : '#0a3d6a';
     $bgColor = $isExcel ? '#f0fdf4' : '#f0f7ff';
     $logoUrl = $isExcel ? 'https://ersila.com/Excel%20Residential%20-%20Icon.png' : 'https://ersila.com/Triumph%20Logo.png';
     $firstName = $applicant->personalInformation?->first_name ?? 'Applicant';
     $propertyName = $applicant->property_name ?? 'the selected property';
+
+    $loginUrl = $loginUrl ?? url('/login');
+    $optOutUrl = $optOutUrl ?? (isset($applicant) ? route('reminders.opt-out', ['applicant' => $applicant->id, 'token' => $applicant->getReminderOptOutToken()]) : null);
+    $remCount = $reminderNumber ?? ($applicant->reminder_sent_count ?? 1);
 @endphp
 <!DOCTYPE html>
 <html>
@@ -56,14 +60,28 @@
             font-size: 13px;
             opacity: 0.92;
         }
+        .reminder-pill {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(4px);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 4px 14px;
+            border-radius: 9999px;
+            margin-top: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+        }
         .content {
             padding: 35px 30px;
         }
         .greeting {
-            font-size: 17px;
+            font-size: 18px;
             font-weight: 700;
             color: #111827;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }
         .message-box {
             background: #f9fafb;
@@ -125,7 +143,7 @@
         }
         .button-wrapper {
             text-align: center;
-            margin: 30px 0 20px;
+            margin: 26px 0 16px;
         }
         .action-button {
             display: inline-block;
@@ -136,7 +154,42 @@
             border-radius: 10px;
             font-weight: 700;
             font-size: 14px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 8px -1px rgba(0,0,0,0.15);
+        }
+        .login-box {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin: 24px 0 16px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+        .login-box h4 {
+            margin: 0 0 6px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .login-box p {
+            margin: 0 0 12px;
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+        .login-button {
+            display: inline-block;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            color: #1e293b !important;
+            text-decoration: none;
+            padding: 9px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s ease;
         }
         .footer {
             background: #f9fafb;
@@ -147,6 +200,20 @@
             text-align: center;
             line-height: 1.6;
         }
+        .opt-out-text {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px dashed #e5e7eb;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        .opt-out-link {
+            color: #6b7280;
+            text-decoration: underline;
+        }
+        .opt-out-link:hover {
+            color: #374151;
+        }
     </style>
 </head>
 <body>
@@ -156,14 +223,23 @@
                 <img src="{{ $logoUrl }}" alt="{{ $brandName }}" />
             @endif
             <h1>{{ $brandName }}</h1>
-            <p>Application Notice &amp; Reminder</p>
+            <p>Application Notice &amp; Follow-up</p>
+            @if($remCount > 0)
+                <div class="reminder-pill">
+                    @if($remCount >= 3)
+                        Final Notice &bull; Reminder 3 of 3
+                    @else
+                        Reminder {{ $remCount }} of 3 &bull; 24h Interval
+                    @endif
+                </div>
+            @endif
         </div>
 
         <div class="content">
             <div class="greeting">Hello {{ $firstName }},</div>
 
             <p style="font-size: 14px; color: #4b5563; margin-top: 0;">
-                We are reaching out regarding your rental application for <strong>{{ $propertyName }}</strong> (Application #{{ $applicant->id }}).
+                We are following up regarding your rental application for <strong>{{ $propertyName }}</strong> (Application #{{ $applicant->id }}).
             </p>
 
             <div class="message-box">
@@ -171,9 +247,9 @@
             </div>
 
             <div class="status-card">
-                <div class="status-title">Current Application Status</div>
+                <div class="status-title">Current Application Checklist</div>
                 <div class="status-row">
-                    <span style="color: #4b5563; font-weight: 600;">Consent Form:</span>
+                    <span style="color: #4b5563; font-weight: 600;">1. Tenant Consent &amp; Background:</span>
                     @if($applicant->is_consent_completed)
                         <span class="badge badge-success">Completed</span>
                     @else
@@ -181,7 +257,7 @@
                     @endif
                 </div>
                 <div class="status-row">
-                    <span style="color: #4b5563; font-weight: 600;">Application Fee:</span>
+                    <span style="color: #4b5563; font-weight: 600;">2. Screening Application Fee:</span>
                     @if($applicant->payment_status === 'paid' || $applicant->payment_status === 'completed')
                         <span class="badge badge-success">Paid</span>
                     @else
@@ -189,7 +265,7 @@
                     @endif
                 </div>
                 <div class="status-row">
-                    <span style="color: #4b5563; font-weight: 600;">Application Details:</span>
+                    <span style="color: #4b5563; font-weight: 600;">3. Application Information &amp; Documents:</span>
                     @if($applicant->status === 'submitted' || $applicant->status === 'approved')
                         <span class="badge badge-success">{{ ucfirst($applicant->status) }}</span>
                     @else
@@ -204,16 +280,37 @@
                         Complete Your Application Now &rarr;
                     </a>
                 </div>
-                <p style="text-align: center; font-size: 11px; color: #9ca3af; margin-top: 8px;">
-                    If the button does not work, visit: <br>
-                    <a href="{{ $actionUrl }}" style="color: {{ $primaryColor }}; word-break: break-all;">{{ $actionUrl }}</a>
+                <p style="text-align: center; font-size: 11px; color: #9ca3af; margin-top: 4px; margin-bottom: 20px;">
+                    Direct link: <a href="{{ $actionUrl }}" style="color: {{ $primaryColor }}; word-break: break-all;">{{ $actionUrl }}</a>
                 </p>
             @endif
+
+            <div class="login-box">
+                <h4>🔐 Tenant Portal Login</h4>
+                <p>
+                    Already started? You can securely log in to your tenant account at any time using your registered email (<strong>{{ $applicant->email }}</strong>) to review your documents, complete pending tasks, or track your application status.
+                </p>
+                <div style="text-align: center;">
+                    <a href="{{ $loginUrl }}" class="login-button" target="_blank">
+                        Log In to Tenant Account &rarr;
+                    </a>
+                </div>
+                <p style="text-align: center; font-size: 11px; color: #94a3b8; margin: 8px 0 0;">
+                    Portal link: <a href="{{ $loginUrl }}" style="color: {{ $primaryColor }};">{{ $loginUrl }}</a>
+                </p>
+            </div>
         </div>
 
         <div class="footer">
             <p style="margin: 0 0 6px;">This email was sent by the management team at <strong>{{ $brandName }}</strong>.</p>
-            <p style="margin: 0;">If you have already submitted your information or have any questions, please contact our leasing office directly.</p>
+            <p style="margin: 0;">If you have already submitted your information or have questions, please reach out to our leasing team directly.</p>
+
+            @if(!empty($optOutUrl))
+                <div class="opt-out-text">
+                    Don't wish to receive automated reminders for this application?
+                    <a href="{{ $optOutUrl }}" class="opt-out-link">Click here to deactivate reminders</a>.
+                </div>
+            @endif
         </div>
     </div>
 </body>

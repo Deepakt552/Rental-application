@@ -102,8 +102,40 @@ class Applicant extends Model
     'admin_comment',
     'reminder_sent_count',
     'last_reminder_sent_at',
+    'reminders_opted_out',
+    'reminder_opt_out_at',
     'move_in_status'
     ];
+
+    protected $casts = [
+        'reminders_opted_out' => 'boolean',
+        'reminder_opt_out_at' => 'datetime',
+        'last_reminder_sent_at' => 'datetime',
+    ];
+
+    public function getIsConsentCompletedAttribute(): bool
+    {
+        if ($this->relationLoaded('consentRecord') && $this->consentRecord) {
+            return $this->consentRecord->status === 'completed';
+        }
+        return ConsentRecord::where('applicant_id', $this->id)
+            ->where('status', 'completed')
+            ->exists();
+    }
+
+    public function getReminderOptOutToken(): string
+    {
+        return hash_hmac('sha256', $this->id . '|' . ($this->email ?? '') . '|reminder_opt_out', config('app.key'));
+    }
+
+    public function verifyReminderOptOutToken(?string $token): bool
+    {
+        if (empty($token)) {
+            return false;
+        }
+        return hash_equals($this->getReminderOptOutToken(), $token);
+    }
+
 
     public function personalInformation(): HasOne
     {

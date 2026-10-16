@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Save, Settings as SettingsIcon, DollarSign, CheckCircle2, Building, Check, ChevronDown, Search, Users, Clock } from 'lucide-react';
+import { Save, Settings as SettingsIcon, DollarSign, CheckCircle2, Building, Check, ChevronDown, Search, Users, Clock, Calendar, Info, AlertCircle, X } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 function MultiSelectDropdown({ options, selectedValues, onChange, placeholder = "Select users..." }) {
@@ -110,7 +110,18 @@ function MultiSelectDropdown({ options, selectedValues, onChange, placeholder = 
     );
 }
 
-export default function Settings({ adultApplicationFee, enableHoldingDeposit, holdingDepositAmount, enableEmailNotifications = true, enableConsentReminders, enablePaymentReminders, properties = [], admins = [] }) {
+export default function Settings({
+    adultApplicationFee,
+    enableHoldingDeposit,
+    holdingDepositAmount,
+    enableEmailNotifications = true,
+    enableConsentReminders,
+    enablePaymentReminders,
+    enableAutomatedReminders = true,
+    reminderStartDate = '',
+    properties = [],
+    admins = []
+}) {
     const { data, setData, post, processing, errors } = useForm({
         adult_application_fee: adultApplicationFee,
         enable_holding_deposit: enableHoldingDeposit,
@@ -118,6 +129,8 @@ export default function Settings({ adultApplicationFee, enableHoldingDeposit, ho
         enable_email_notifications: enableEmailNotifications,
         enable_consent_reminders: enableConsentReminders,
         enable_payment_reminders: enablePaymentReminders,
+        enable_automated_reminders: enableAutomatedReminders,
+        reminder_start_date: reminderStartDate || '',
         property_settings: properties.map(p => ({
             id: p.id,
             app_notification_recipients: p.app_notification_recipients || [],
@@ -154,8 +167,10 @@ export default function Settings({ adultApplicationFee, enableHoldingDeposit, ho
                 toast.success('Settings updated successfully!');
                 setTimeout(() => setShowSuccessAlert(false), 5000);
             },
-            onError: () => {
-                toast.error('Failed to update settings. Please check the fields.');
+            onError: (errs) => {
+                console.error('Settings validation failed:', errs);
+                const firstMsg = Object.values(errs || {})[0];
+                toast.error(firstMsg || 'Failed to update settings. Please check the fields.');
             }
         });
     };
@@ -369,12 +384,132 @@ export default function Settings({ adultApplicationFee, enableHoldingDeposit, ho
                                         </div>
                                     </div>
 
-                                    {/* Email Reminders */}
+                                    {/* Automatic Reminders Master Switch */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start pb-6 border-b border-slate-200 dark:border-slate-700">
+                                        <div className="md:col-span-1">
+                                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                                <span>Automated Tenant Reminders</span>
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                    data.enable_automated_reminders
+                                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                                                }`}>
+                                                    {data.enable_automated_reminders ? 'Active' : 'Disabled'}
+                                                </span>
+                                            </h3>
+                                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
+                                                Master toggle for hourly automated reminders. When enabled, tenants receive up to 3 reminders spaced 24 hours apart for incomplete applications, consent forms, or unpaid fees.
+                                            </p>
+                                        </div>
+                                        <div className="md:col-span-2 space-y-4">
+                                            <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+                                                <input
+                                                    type="checkbox"
+                                                    id="enable_automated_reminders"
+                                                    checked={data.enable_automated_reminders}
+                                                    onChange={(e) => setData('enable_automated_reminders', e.target.checked)}
+                                                    className="h-5 w-5 rounded text-[#0e4a81] dark:text-[#5a9bd5] border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-[#0e4a81] dark:focus:ring-[#5a9bd5] transition-all cursor-pointer"
+                                                />
+                                                <div>
+                                                    <label htmlFor="enable_automated_reminders" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none block">
+                                                        Enable Automated Tenant Reminders
+                                                    </label>
+                                                    <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 block">
+                                                        Runs automatically via schedule every hour to follow up with applicants.
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {errors.enable_automated_reminders && (
+                                                <p className="mt-2 text-sm text-red-500 dark:text-red-400 font-medium">{errors.enable_automated_reminders}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Application Cutoff Date Filter */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start pb-6 border-b border-slate-200 dark:border-slate-700">
+                                        <div className="md:col-span-1">
+                                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                                <Calendar className="w-4 h-4 text-[#0e4a81] dark:text-sky-400" />
+                                                <span>Reminder Start Date (Cutoff)</span>
+                                            </h3>
+                                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
+                                                Specify the date from which automated reminders should start. <strong>Reminders will only be sent for applications submitted on or after this date.</strong> Older applications submitted before this date will be excluded so past users do not receive reminders.
+                                            </p>
+                                        </div>
+                                        <div className="md:col-span-2 space-y-4">
+                                            <div>
+                                                <label htmlFor="reminder_start_date" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                                    Process Applications Submitted On Or After
+                                                </label>
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <div className="relative">
+                                                        <input
+                                                            type="date"
+                                                            id="reminder_start_date"
+                                                            value={data.reminder_start_date || ''}
+                                                            onChange={(e) => setData('reminder_start_date', e.target.value)}
+                                                            disabled={!data.enable_automated_reminders}
+                                                            className="block px-4 py-2.5 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600 focus:border-slate-300 dark:focus:border-slate-600 transition-all text-xs font-bold text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                                        />
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        disabled={!data.enable_automated_reminders}
+                                                        onClick={() => {
+                                                            const now = new Date();
+                                                            const yyyy = now.getFullYear();
+                                                            const mm = String(now.getMonth() + 1).padStart(2, '0');
+                                                            const dd = String(now.getDate()).padStart(2, '0');
+                                                            setData('reminder_start_date', `${yyyy}-${mm}-${dd}`);
+                                                        }}
+                                                        className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                                                    >
+                                                        Set to Today
+                                                    </button>
+
+                                                    {data.reminder_start_date && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={!data.enable_automated_reminders}
+                                                            onClick={() => setData('reminder_start_date', '')}
+                                                            className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40 transition-all shadow-2xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                                                        >
+                                                            Clear Cutoff (All Dates)
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Explanatory Banner */}
+                                            {data.reminder_start_date ? (
+                                                <div className="p-3.5 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-500/30 flex items-start gap-3">
+                                                    <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                                                    <p className="text-xs text-sky-900 dark:text-sky-200 font-medium leading-relaxed">
+                                                        <strong>Active Cutoff Filter:</strong> Only applications created on or after <strong>{data.reminder_start_date}</strong> will receive automatic reminders. Previous applications created before this date are protected from automated reminders.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex items-start gap-3">
+                                                    <Info className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                                                        <strong>No Date Filter:</strong> No start cutoff date is set. Reminders will be evaluated for all incomplete applications regardless of submission date.
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {errors.reminder_start_date && (
+                                                <p className="mt-2 text-sm text-red-500 dark:text-red-400 font-medium">{errors.reminder_start_date}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Sub-Reminders: Consent & Payment */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                                         <div className="md:col-span-1">
-                                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Email Reminders</h3>
+                                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Reminder Categories</h3>
                                             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
-                                                Configure automatic email reminders to admins and superadmins for incomplete applications and payments.
+                                                Fine-tune which reminder types are eligible to be dispatched automatically.
                                             </p>
                                         </div>
                                         <div className="md:col-span-2 space-y-4">
@@ -387,7 +522,7 @@ export default function Settings({ adultApplicationFee, enableHoldingDeposit, ho
                                                     className="h-4.5 w-4.5 rounded text-[#0e4a81] dark:text-[#5a9bd5] border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-[#0e4a81] dark:focus:ring-[#5a9bd5] transition-all cursor-pointer"
                                                 />
                                                 <label htmlFor="enable_consent_reminders" className="text-sm font-semibold text-slate-600 dark:text-slate-400 cursor-pointer select-none">
-                                                    Enable Consent Form Reminders (to Triumph and Excel admins)
+                                                    Enable Consent Form Reminders
                                                 </label>
                                             </div>
                                             {errors.enable_consent_reminders && (
@@ -403,7 +538,7 @@ export default function Settings({ adultApplicationFee, enableHoldingDeposit, ho
                                                     className="h-4.5 w-4.5 rounded text-[#0e4a81] dark:text-[#5a9bd5] border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-[#0e4a81] dark:focus:ring-[#5a9bd5] transition-all cursor-pointer"
                                                 />
                                                 <label htmlFor="enable_payment_reminders" className="text-sm font-semibold text-slate-600 dark:text-slate-400 cursor-pointer select-none">
-                                                    Enable Payment Reminders (Optional)
+                                                    Enable Payment Reminders
                                                 </label>
                                             </div>
                                             {errors.enable_payment_reminders && (

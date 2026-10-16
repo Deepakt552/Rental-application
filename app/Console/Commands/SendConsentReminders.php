@@ -46,16 +46,39 @@ class SendConsentReminders extends Command
             return;
         }
 
+        if (\App\Models\Setting::get('enable_automated_reminders', '1') !== '1') {
+            $this->info('Automated reminders are disabled in settings. Skipping.');
+            return;
+        }
+
+        if (\App\Models\Setting::get('enable_email_notifications', '1') !== '1') {
+            $this->info('Email notifications are globally disabled in settings. Skipping.');
+            return;
+        }
+
         $force = $this->option('force');
 
         // Find applicants who filled application form but incomplete without filling consent form
-        $applicants = Applicant::with('personalInformation')
+        $applicantsQuery = Applicant::with('personalInformation')
             ->where(function ($q) {
                 $q->whereNull('admin_comment')
                   ->orWhere('admin_comment', '');
             })
             ->where('reminder_sent_count', '<', 3)
-            ->whereHas('personalInformation')
+            ->whereHas('personalInformation');
+
+        $reminderStartDate = \App\Models\Setting::get('reminder_start_date');
+        if (!empty($reminderStartDate)) {
+            try {
+                $cutoffDate = \Carbon\Carbon::parse($reminderStartDate)->startOfDay();
+                $applicantsQuery->where('created_at', '>=', $cutoffDate);
+                $this->info("Consent reminder cutoff active: Only applicants created on or after {$cutoffDate->toDateString()} will be processed.");
+            } catch (\Exception $e) {
+                Log::warning("Invalid reminder_start_date format: {$reminderStartDate}");
+            }
+        }
+
+        $applicants = $applicantsQuery
             ->when(!$force, function ($query) {
                 $query->where(function ($q) {
                     $q->where(function ($sub) {
