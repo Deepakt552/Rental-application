@@ -25,6 +25,9 @@ const LEAD_SOURCES = [
 
 export default function ApplicationForm({ sessionId: propSessionId }) {
     const { type, auth, initialApplicantId, initialStep } = usePage().props;
+    const isAdmin = auth?.user?.role === 'admin' || auth?.user?.role === 'superadmin' || type === 'admin' || type === 'superadmin';
+    const isEditing = Boolean(initialApplicantId);
+    const allowPastDate = isAdmin || isEditing;
     const [currentStep, setCurrentStep] = useState(1);
     const [applicantId, setApplicantId] = useState(null);
     const [sessionId, setSessionId] = useState(propSessionId || crypto.randomUUID());
@@ -145,7 +148,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         })();
 
-        if (desiredMoveDate && desiredMoveDate < todayStr) {
+        if (!allowPastDate && desiredMoveDate && desiredMoveDate < todayStr) {
             setPropertyModalError('Desired Move-In Date cannot be in the past. Please select today or a future date.');
             return;
         }
@@ -3434,10 +3437,10 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     </label>
                                     <input
                                         type="date"
-                                        min={(() => {
+                                        min={!allowPastDate ? (() => {
                                             const d = new Date();
                                             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                        })()}
+                                        })() : undefined}
                                         value={desiredMoveDate}
                                         onChange={(e) => setDesiredMoveDate(e.target.value)}
                                         className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-700 transition-all outline-none"

@@ -528,7 +528,7 @@ class ApplicationController extends Controller
             'property_code' => $request->property_code !== null && $request->property_code !== '' ? $request->property_code : null,
             'property_name' => $request->property_name,
             'property_type' => $request->property_type,
-            'desired_move_date' => $request->desired_move_date,
+            'desired_move_date' => $request->filled('desired_move_date') ? $request->desired_move_date : null,
             'source' => $request->source,
             'source_other' => $request->source === 'Other' ? $request->source_other : null,
         ]);

@@ -177,6 +177,8 @@ class ApplicationController extends Controller
      */
     public function initApplication(Request $request)
     {
+        $isAdmin = Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isSuperAdmin());
+
         $request->validate([
             'email' => 'required|email',
             'type' => 'nullable|string',
@@ -184,7 +186,7 @@ class ApplicationController extends Controller
             'property_id' => 'nullable',
             'property_name' => 'nullable|string',
             'property_type' => 'nullable|string',
-            'desired_move_date' => 'nullable|date|after_or_equal:today',
+            'desired_move_date' => $isAdmin ? 'nullable|date' : 'nullable|date|after_or_equal:today',
             'source' => 'nullable|string',
             'source_other' => 'nullable|string',
         ]);
@@ -267,7 +269,7 @@ class ApplicationController extends Controller
                 'property_id' => $request->property_id,
                 'property_name' => $request->property_name,
                 'property_type' => $request->property_type,
-                'desired_move_date' => $request->desired_move_date,
+                'desired_move_date' => $request->filled('desired_move_date') ? $request->desired_move_date : null,
                 'source' => $request->source,
                 'source_other' => $request->source_other,
             ]);
@@ -1256,7 +1258,7 @@ class ApplicationController extends Controller
             'property_name' => 'required|string|max:255',
             'property_id' => 'nullable',
             'property_type' => 'nullable|string|max:255',
-            'desired_move_date' => 'nullable|date|after_or_equal:today',
+            'desired_move_date' => 'nullable|date',
             'source' => 'nullable|string|max:255',
             'source_other' => 'nullable|string|max:255',
         ]);
@@ -1271,7 +1273,7 @@ class ApplicationController extends Controller
             'property_id' => $request->property_id ?: null,
             'property_name' => $request->property_name,
             'property_type' => $request->property_type,
-            'desired_move_date' => $request->desired_move_date,
+            'desired_move_date' => $request->filled('desired_move_date') ? $request->desired_move_date : null,
             'source' => $request->source,
             'source_other' => $request->source === 'Other' ? $request->source_other : null,
         ]);

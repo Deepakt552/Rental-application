@@ -280,9 +280,9 @@
                         Complete Your Application Now &rarr;
                     </a>
                 </div>
-                <p style="text-align: center; font-size: 11px; color: #9ca3af; margin-top: 4px; margin-bottom: 20px;">
+                <!-- <p style="text-align: center; font-size: 11px; color: #9ca3af; margin-top: 4px; margin-bottom: 20px;">
                     Direct link: <a href="{{ $actionUrl }}" style="color: {{ $primaryColor }}; word-break: break-all;">{{ $actionUrl }}</a>
-                </p>
+                </p> -->
             @endif
 
             <div class="login-box">

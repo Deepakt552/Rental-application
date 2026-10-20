@@ -158,16 +158,6 @@ export default function ApplicationDetail({ applicant }) {
             return;
         }
 
-        const todayStr = (() => {
-            const d = new Date();
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        })();
-
-        if (propertyFormData.desired_move_date && propertyFormData.desired_move_date < todayStr) {
-            toast.error('Desired Move-In Date cannot be in the past. Please select today or a future date.');
-            return;
-        }
-
         setSavingProperty(true);
         router.put(route('admin.applications.property-details', applicant.id), propertyFormData, {
             preserveScroll: true,
@@ -1718,10 +1708,6 @@ export default function ApplicationDetail({ applicant }) {
                                 </label>
                                 <input
                                     type="date"
-                                    min={(() => {
-                                        const d = new Date();
-                                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                    })()}
                                     value={propertyFormData.desired_move_date}
                                     onChange={(e) => setPropertyFormData(prev => ({ ...prev, desired_move_date: e.target.value }))}
                                     className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-700/80 px-3 text-xs focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none transition-all"
