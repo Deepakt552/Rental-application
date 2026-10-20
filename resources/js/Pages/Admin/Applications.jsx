@@ -104,7 +104,7 @@ export default function Applications({ applicants, filters, total_admin, total_s
             preserveState: true,
             onSuccess: () => {
                 setUpdatingMoveInId(null);
-                const readable = newStatus === 'moved_in' ? 'Moved In' : (newStatus === 'denied' ? 'Denied' : 'Pending');
+                const readable = newStatus === 'moved_in' ? 'Moved In' : (newStatus === 'denied' ? 'Denied' : (newStatus === 'in_progress' ? 'In Progress' : 'Pending'));
                 Swal.fire({
                     toast: true,
                     position: 'top-end',
@@ -526,6 +526,7 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                         >
                                             <option value="">All Move-In</option>
                                             <option value="pending">Pending</option>
+                                            <option value="in_progress">In Progress</option>
                                             <option value="moved_in">Moved In</option>
                                             <option value="denied">Denied</option>
                                         </select>
@@ -730,11 +731,10 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                 <td className="px-3.5 py-3.5">
                                                     <div className="flex items-center gap-2.5">
                                                         <div
-                                                            className={`w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-xs ring-1 ring-black/10 dark:ring-white/10 group-hover:scale-105 transition-transform duration-150 ${
-                                                                isTriumph
-                                                                    ? 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 dark:from-sky-950/90 dark:to-blue-900/80 dark:text-sky-300 dark:ring-sky-500/30'
-                                                                    : 'bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 dark:from-purple-950/90 dark:to-indigo-900/80 dark:text-purple-300 dark:ring-purple-500/30'
-                                                            }`}
+                                                            className={`w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-xs ring-1 ring-black/10 dark:ring-white/10 group-hover:scale-105 transition-transform duration-150 ${isTriumph
+                                                                ? 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 dark:from-sky-950/90 dark:to-blue-900/80 dark:text-sky-300 dark:ring-sky-500/30'
+                                                                : 'bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 dark:from-purple-950/90 dark:to-indigo-900/80 dark:text-purple-300 dark:ring-purple-500/30'
+                                                                }`}
                                                         >
                                                             {initials}
                                                         </div>
@@ -826,10 +826,13 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                                 ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
                                                                 : moveInVal === 'denied'
                                                                     ? 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/40'
-                                                                    : 'bg-white dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                                                    : moveInVal === 'in_progress'
+                                                                        ? 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/40'
+                                                                        : 'bg-white dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
                                                                 }`}
                                                         >
                                                             <option value="">-- Pending --</option>
+                                                            <option value="in_progress">In Progress</option>
                                                             <option value="moved_in">Moved In</option>
                                                             <option value="denied">Denied</option>
                                                         </select>

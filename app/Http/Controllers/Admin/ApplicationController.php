@@ -680,7 +680,7 @@ class ApplicationController extends Controller
                     $resolvedPropertyCode = (string)$app->property_code;
                 }
 
-                $moveInStatusVal = $app->move_in_status === 'moved_in' ? 'Moved In' : ($app->move_in_status === 'denied' ? 'Denied' : 'Pending');
+                $moveInStatusVal = $app->move_in_status === 'moved_in' ? 'Moved In' : ($app->move_in_status === 'denied' ? 'Denied' : ($app->move_in_status === 'in_progress' ? 'In Progress' : 'Pending'));
 
                 $row['ID'] = $app->id;
                 $row['Type'] = $app->type === 'admin' ? 'Triumph' : ($app->type === 'superadmin' ? 'Excel' : 'User');
@@ -723,7 +723,7 @@ class ApplicationController extends Controller
     public function updateMoveInStatus(Request $request, $id)
     {
         $request->validate([
-            'move_in_status' => 'nullable|string|in:moved_in,denied,pending,',
+            'move_in_status' => 'nullable|string|in:moved_in,denied,in_progress,pending,',
         ]);
 
         $applicant = Applicant::findOrFail($id);
