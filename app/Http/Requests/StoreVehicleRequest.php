@@ -17,6 +17,7 @@ class StoreVehicleRequest extends FormRequest
             'vehicles' => 'nullable|array|max:4',
             'vehicles.*.vehicle_type' => 'nullable|string|max:50',
             'vehicles.*.model' => 'nullable|string|max:255',
+            'vehicles.*.color' => 'nullable|string|max:50',
             'vehicles.*.plate_number' => 'nullable|string|max:50',
         ];
     }

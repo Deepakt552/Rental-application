@@ -15,24 +15,28 @@ class PropertyController extends Controller
      */
     public function search(Request $request)
     {
-        $request->validate([
-            'company_name' => 'required|in:Triumph,Excel',
-            'search' => 'nullable|string|min:2',
-        ]);
+        try {
+            $search = trim((string) $request->get('search', ''));
+            $companyName = trim((string) $request->get('company_name', ''));
 
-        $search = $request->search;
-        $companyName = $request->company_name;
+            $query = Property::query();
 
-        $properties = Property::query()
-            ->where('company_name', $companyName)
-            ->when($search, function ($query) use ($search) {
+            if (!empty($companyName)) {
+                $query->where(function ($q) use ($companyName) {
+                    $q->where('company_name', 'LIKE', "%{$companyName}%")
+                        ->orWhereRaw('LOWER(company_name) = ?', [strtolower($companyName)]);
+                });
+            }
+
+            if (!empty($search)) {
                 $query->where(function ($q) use ($search) {
                     $q->where('property_name', 'LIKE', "%{$search}%")
                         ->orWhere('property_code', 'LIKE', "%{$search}%")
                         ->orWhere('address', 'LIKE', "%{$search}%");
                 });
-            })
-            ->select(
+            }
+
+            $properties = $query->select(
                 'id',
                 'property_code',
                 'property_name',
@@ -40,14 +44,20 @@ class PropertyController extends Controller
                 'property_type',
                 'address'
             )
-            ->limit(10)
+            ->limit(20)
             ->get();
 
-
-        return response()->json([
-            'status' => true,
-            'data' => $properties,
-        ]);
+            return response()->json([
+                'status' => true,
+                'data' => $properties,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+                'data' => [],
+            ], 200);
+        }
     }
 
     /**

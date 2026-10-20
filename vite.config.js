@@ -15,4 +15,9 @@ export default defineConfig({
             '@': '/resources/js',
         },
     },
+    server: {
+        watch: {
+            ignored: ['**/*.zip', '**/storage/**'],
+        },
+    },
 });

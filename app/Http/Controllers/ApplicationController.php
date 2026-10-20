@@ -827,6 +827,7 @@ class ApplicationController extends Controller
                         'applicant_id' => $request->applicant_id,
                         'vehicle_type' => $vehicle['vehicle_type'] ?? null,
                         'model' => $vehicle['model'] ?? null,
+                        'color' => $vehicle['color'] ?? null,
                         'plate_number' => $vehicle['plate_number'] ?? null
                     ]);
                 }

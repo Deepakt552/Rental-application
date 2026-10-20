@@ -89,7 +89,8 @@ export default function ApplicationDetail({ applicant }) {
     );
     const [savingProperty, setSavingProperty] = useState(false);
 
-    const companyName = applicant.company_name || (applicant.type === 'superadmin' ? 'Excel' : 'Triumph');
+    const rawCompany = applicant.company_name || '';
+    const companyName = (/excel/i.test(rawCompany) || applicant.type === 'superadmin') ? 'Excel' : 'Triumph';
 
     useEffect(() => {
         if (!propertySearchQuery || propertySearchQuery.trim().length < 2) {
@@ -99,12 +100,28 @@ export default function ApplicationDetail({ applicant }) {
 
         const timer = setTimeout(() => {
             setPropertySearchLoading(true);
-            fetch(`/properties/search?company_name=${encodeURIComponent(companyName)}&search=${encodeURIComponent(propertySearchQuery.trim())}`)
-                .then(res => res.json())
-                .then(data => {
-                    setPropertySearchResults(data.data || []);
+            fetch(`/properties/search?company_name=${encodeURIComponent(companyName)}&search=${encodeURIComponent(propertySearchQuery.trim())}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(async (res) => {
+                    const contentType = res.headers.get('content-type');
+                    if (res.ok && contentType && contentType.includes('application/json')) {
+                        return res.json();
+                    }
+                    const text = await res.text();
+                    console.warn('Property search returned non-JSON:', text.slice(0, 100));
+                    return { data: [] };
                 })
-                .catch(err => console.error(err))
+                .then(data => {
+                    setPropertySearchResults(data?.data || []);
+                })
+                .catch(err => {
+                    console.error('Property search error:', err);
+                    setPropertySearchResults([]);
+                })
                 .finally(() => setPropertySearchLoading(false));
         }, 300);
 
@@ -1138,9 +1155,17 @@ export default function ApplicationDetail({ applicant }) {
                                                             </div>
                                                             <div>
                                                                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{vehicle.model || 'N/A'}</p>
-                                                                <p className="text-xs text-slate-400 font-bold uppercase">{vehicle.vehicle_type}</p>
+                                                                <p className="text-xs text-slate-400 font-bold uppercase">
+                                                                    {vehicle.vehicle_type} {vehicle.color ? `• ${vehicle.color}` : ''}
+                                                                </p>
                                                             </div>
                                                         </div>
+                                                        {vehicle.color && (
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="text-xs font-bold text-slate-400 uppercase">Color</span>
+                                                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{vehicle.color}</span>
+                                                            </div>
+                                                        )}
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-xs font-bold text-slate-400 uppercase">License Plate</span>
                                                             <span className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono font-bold text-slate-700 dark:text-slate-200">{vehicle.plate_number || 'N/A'}</span>

@@ -794,6 +794,7 @@
                         <tr>
                             <th>Type</th>
                             <th>Model / Make</th>
+                            <th>Color</th>
                             <th>License Plate</th>
                         </tr>
                     </thead>
@@ -802,6 +803,7 @@
                         <tr>
                             <td>{!! displayVal($vehicle->vehicle_type ?? null) !!}</td>
                             <td style="color: #114a7f;">{!! displayVal($vehicle->model ?? null) !!}</td>
+                            <td>{!! displayVal($vehicle->color ?? null) !!}</td>
                             <td>{!! displayVal($vehicle->plate_number ?? null) !!}</td>
                         </tr>
                         @endforeach

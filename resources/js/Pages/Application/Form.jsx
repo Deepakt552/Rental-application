@@ -102,12 +102,26 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
         const delayDebounce = setTimeout(() => {
             setPropertyLoading(true);
-            fetch(`/properties/search?search=${encodeURIComponent(propertySearch)}&company_name=${encodeURIComponent(companyName)}`)
-                .then(res => res.json())
-                .then(data => {
-                    setPropertyResults(data.data || []);
+            fetch(`/properties/search?search=${encodeURIComponent(propertySearch)}&company_name=${encodeURIComponent(companyName)}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(async res => {
+                    const contentType = res.headers.get('content-type');
+                    if (res.ok && contentType && contentType.includes('application/json')) {
+                        return res.json();
+                    }
+                    return { data: [] };
                 })
-                .catch(err => console.error(err))
+                .then(data => {
+                    setPropertyResults(data?.data || []);
+                })
+                .catch(err => {
+                    console.error(err);
+                    setPropertyResults([]);
+                })
                 .finally(() => setPropertyLoading(false));
         }, 300);
 
@@ -1413,8 +1427,19 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         }
                         if (result.property_name) {
                             setPropertySearch(result.property_name);
-                            fetch(`/properties/search?company_name=${encodeURIComponent(result.company_name || 'Triumph')}&search=${encodeURIComponent(result.property_name)}`)
-                                .then(res => res ? res.json() : null)
+                            fetch(`/properties/search?company_name=${encodeURIComponent(result.company_name || 'Triumph')}&search=${encodeURIComponent(result.property_name)}`, {
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                }
+                            })
+                                .then(async res => {
+                                    const contentType = res.headers.get('content-type');
+                                    if (res.ok && contentType && contentType.includes('application/json')) {
+                                        return res.json();
+                                    }
+                                    return { data: [] };
+                                })
                                 .then(data => {
                                     if (data && data.data && data.data.length > 0) {
                                         const match = data.data.find(p => p.property_name?.toLowerCase() === result.property_name?.toLowerCase()) || data.data[0];
@@ -1722,7 +1747,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
     const addVehicle = () => {
         if (vehicles.length < 4) {
-            setVehicles([...vehicles, { vehicle_type: '', model: '', plate_number: '' }]);
+            setVehicles([...vehicles, { vehicle_type: '', model: '', color: '', plate_number: '' }]);
         }
     };
 
@@ -2768,7 +2793,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                         <h3 className="font-semibold">Vehicle #{idx + 1}</h3>
                         <button type="button" onClick={() => removeVehicle(idx)} className="text-red-500 text-sm">Remove</button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                         <select value={vehicle.vehicle_type} onChange={(e) => updateVehicle(idx, 'vehicle_type', e.target.value)} className="rounded-md border-gray-300">
                             <option value="">Select Type</option>
                             <option value="Car">Car</option>
@@ -2778,6 +2803,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             <option value="Other">Other</option>
                         </select>
                         <input type="text" placeholder="Model" value={vehicle.model} onChange={(e) => updateVehicle(idx, 'model', e.target.value)} className="rounded-md border-gray-300" />
+                        <input type="text" placeholder="Color" value={vehicle.color || ''} onChange={(e) => updateVehicle(idx, 'color', e.target.value)} className="rounded-md border-gray-300" />
                         <input type="text" placeholder="Plate Number" value={vehicle.plate_number} onChange={(e) => updateVehicle(idx, 'plate_number', e.target.value)} className="rounded-md border-gray-300" />
                     </div>
                 </div>

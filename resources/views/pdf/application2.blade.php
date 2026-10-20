@@ -381,7 +381,7 @@
                 <td class="label-cell">Vehicles:</td>
                 <td class="value-cell">
                     @forelse($applicant->vehicles as $vehicle)
-                    {{ $vehicle->model }} ({{ $vehicle->plate_number }}){{ !$loop->last ? ', ' : '' }}
+                    {{ $vehicle->model }}{{ !empty($vehicle->color) ? ' (' . $vehicle->color . ')' : '' }} - {{ $vehicle->plate_number }}{{ !$loop->last ? ', ' : '' }}
                     @empty
                     None
                     @endforelse

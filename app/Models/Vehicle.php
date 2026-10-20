@@ -11,6 +11,7 @@ class Vehicle extends Model
         'applicant_id',
         'vehicle_type',
         'model',
+        'color',
         'plate_number',
     ];
 
