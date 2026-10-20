@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Applicant;
+use App\Models\Property;
 use App\Models\PersonalInformation;
 use App\Models\CurrentAddress;
 use App\Models\PreviousAddress;
@@ -183,13 +184,18 @@ class ApplicationController extends Controller
             'email' => 'required|email',
             'type' => 'nullable|string',
             'company_name' => 'nullable|string',
-            'property_id' => 'nullable',
+            'property_id' => 'required|exists:properties,id',
             'property_name' => 'nullable|string',
             'property_type' => 'nullable|string',
             'desired_move_date' => $isAdmin ? 'nullable|date' : 'nullable|date|after_or_equal:today',
             'source' => 'nullable|string',
             'source_other' => 'nullable|string',
+        ], [
+            'property_id.required' => 'Property not available. Please select an available property from the suggestions list. Try searching by address or property code.',
+            'property_id.exists' => 'The selected property does not exist in our system. Please select an available property from the suggestions.',
         ]);
+
+        $selectedProp = Property::findOrFail($request->property_id);
 
         try {
             DB::beginTransaction();
@@ -265,9 +271,10 @@ class ApplicationController extends Controller
                 'current_step' => 1,
                 'status' => 'draft',
                 'type' => $request->type ?? 'admin',
-                'company_name' => $request->company_name,
-                'property_id' => $request->property_id,
-                'property_name' => $request->property_name,
+                'company_name' => $selectedProp->company_name ?? $request->company_name,
+                'property_id' => $selectedProp->id,
+                'property_code' => $selectedProp->property_code,
+                'property_name' => $selectedProp->property_name,
                 'property_type' => $request->property_type,
                 'desired_move_date' => $request->filled('desired_move_date') ? $request->desired_move_date : null,
                 'source' => $request->source,
@@ -1256,12 +1263,14 @@ class ApplicationController extends Controller
     {
         $request->validate([
             'applicant_id' => 'required|exists:applicants,id',
-            'property_name' => 'required|string|max:255',
-            'property_id' => 'nullable',
+            'property_id' => 'required|exists:properties,id',
             'property_type' => 'nullable|string|max:255',
             'desired_move_date' => 'nullable|date',
             'source' => 'nullable|string|max:255',
             'source_other' => 'nullable|string|max:255',
+        ], [
+            'property_id.required' => 'Please select an available property from the suggestions list. Manual typing is not permitted.',
+            'property_id.exists' => 'The selected property was not found. Please try searching by address or property code and select from the suggestions.',
         ]);
 
         $access = $this->checkApplicantAccessAndPayment($request->applicant_id, false);
@@ -1269,10 +1278,13 @@ class ApplicationController extends Controller
             return response()->json(['success' => false, 'message' => $access['message']], $access['error_code']);
         }
 
+        $property = Property::findOrFail($request->property_id);
+
         $applicant = $access['applicant'];
         $applicant->update([
-            'property_id' => $request->property_id ?: null,
-            'property_name' => $request->property_name,
+            'property_id' => $property->id,
+            'property_code' => $property->property_code,
+            'property_name' => $property->property_name,
             'property_type' => $request->property_type,
             'desired_move_date' => $request->filled('desired_move_date') ? $request->desired_move_date : null,
             'source' => $request->source,

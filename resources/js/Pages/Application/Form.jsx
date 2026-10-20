@@ -73,6 +73,19 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                 const parsed = JSON.parse(savedApplication);
                 if (parsed.source) setSource(parsed.source);
                 if (parsed.source_other) setSourceOther(parsed.source_other);
+                if (parsed.desired_move_date) setDesiredMoveDate(parsed.desired_move_date);
+                if (parsed.property_id && parsed.property_name) {
+                    setSelectedProperty({
+                        id: parsed.property_id,
+                        property_name: parsed.property_name,
+                        property_type: parsed.property_type ? [parsed.property_type] : []
+                    });
+                    setPropertySearch(parsed.property_name);
+                }
+                if (parsed.property_type) {
+                    setSelectedPropertyType(parsed.property_type);
+                    setPropertyTypes(prev => prev.includes(parsed.property_type) ? prev : [...prev, parsed.property_type]);
+                }
                 const pageCompany = type === 'superadmin' ? 'Excel' : 'Triumph';
                 const hasValidSource = parsed.source && (parsed.source !== 'Other' || (parsed.source_other && parsed.source_other.trim()));
                 if (parsed.company_name === pageCompany && parsed.property_id && parsed.desired_move_date && hasValidSource) {
@@ -143,7 +156,12 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     const handlePropertySubmit = () => {
         setPropertyModalError('');
 
-        const propertyToUse = selectedProperty || (propertySearch?.trim() ? { id: null, property_name: propertySearch.trim() } : null);
+        if (!selectedProperty || !selectedProperty.id) {
+            setPropertyModalError('Property not available. You must select an available property from the suggestions list. Manual typing is not permitted. Please try searching by address or property code.');
+            return;
+        }
+
+        const propertyToUse = selectedProperty;
 
         const missing = [];
         if (!propertyToUse) missing.push('Property Name');
@@ -3379,9 +3397,12 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
 
                                 {/* Property Search */}
                                 <div className="relative">
-                                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">
-                                        Property Name <span className="text-red-500">*</span>
-                                    </label>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                                            Property Name <span className="text-red-500">*</span>
+                                        </label>
+                                        <span className="text-[10px] text-slate-400 font-medium">Select from suggestions only</span>
+                                    </div>
                                     <div className="relative">
                                         <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
                                         <input
@@ -3390,13 +3411,14 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                             onFocus={() => setIsPropertySearchFocused(true)}
                                             onBlur={() => setTimeout(() => setIsPropertySearchFocused(false), 250)}
                                             onChange={(e) => {
+                                                const val = e.target.value;
                                                 setIsPropertySearchFocused(true);
-                                                setPropertySearch(e.target.value);
-                                                if (selectedProperty && selectedProperty.property_name !== e.target.value) {
+                                                setPropertySearch(val);
+                                                if (selectedProperty && selectedProperty.property_name !== val) {
                                                     setSelectedProperty(null);
                                                 }
                                             }}
-                                            placeholder={propertyLoading ? "Searching properties..." : "Type property name or address..."}
+                                            placeholder={propertyLoading ? "Searching properties..." : "Search by property name, address, or code..."}
                                             className="w-full h-10 rounded-xl border border-slate-200 pl-10 pr-3 text-xs focus:ring-2 focus:ring-[#0e4a81]/20 focus:border-[#0e4a81] bg-slate-50 focus:bg-white text-slate-800 transition-all outline-none"
                                         />
                                     </div>
@@ -3409,18 +3431,77 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                                     key={property.id}
                                                     type="button"
                                                     onMouseDown={() => handleSelectProperty(property)}
-                                                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 flex flex-col transition-colors cursor-pointer"
+                                                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 flex flex-col transition-colors cursor-pointer group"
                                                 >
-                                                    <span className="font-bold text-xs text-slate-800">
-                                                        {property.property_name}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-500 mt-0.5">
-                                                        {Array.isArray(property.property_type) ? property.property_type.join(', ') : (property.property_type || 'Residential')}
-                                                        {property.address ? ` • ${property.address}` : ''}
-                                                    </span>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="font-bold text-xs text-slate-800 group-hover:text-[#0e4a81] transition-colors">
+                                                            {property.property_name}
+                                                        </span>
+                                                        {property.property_code && (
+                                                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 border text-slate-600">
+                                                                Code: {property.property_code}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                                                        {property.address && (
+                                                            <span className="flex items-center gap-1 text-slate-600">
+                                                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                                                {property.address}
+                                                            </span>
+                                                        )}
+                                                        {property.address && property.property_type && <span>•</span>}
+                                                        {property.property_type && (
+                                                            <span>{Array.isArray(property.property_type) ? property.property_type.join(', ') : property.property_type}</span>
+                                                        )}
+                                                    </div>
                                                 </button>
                                             ))}
                                         </div>
+                                    )}
+
+                                    {/* Error / No Results Dropdown when query has at least 2 chars */}
+                                    {isPropertySearchFocused && !propertyLoading && propertySearch.trim().length >= 2 && propertyResults.length === 0 && (
+                                        <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white border border-amber-300 rounded-xl shadow-2xl p-3.5 text-xs">
+                                            <div className="flex items-start gap-2.5">
+                                                <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="font-bold text-rose-600">Property not available</p>
+                                                    <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                                                        No matching property found. Please try searching by <strong>address</strong> or <strong>property code</strong>.
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-400 mt-1 italic">
+                                                        Manual property typing is not permitted. You must select an available property from the suggestions.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Selected Property Status Badge */}
+                                    {selectedProperty && selectedProperty.id ? (
+                                        <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-emerald-900 truncate">
+                                                        {selectedProperty.property_name}
+                                                    </p>
+                                                    <p className="text-[10px] text-emerald-700 flex items-center gap-2">
+                                                        {selectedProperty.property_code && <span>Code: <strong>{selectedProperty.property_code}</strong></span>}
+                                                        {selectedProperty.address && <span>• {selectedProperty.address}</span>}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md shrink-0">
+                                                Verified
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] text-amber-600 font-medium mt-1.5 flex items-center gap-1">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                            Please select an available property from suggestions. Manual typing is not allowed.
+                                        </p>
                                     )}
                                 </div>
 

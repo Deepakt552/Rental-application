@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Applicant;
+use App\Models\Property;
 use App\Services\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -512,21 +513,23 @@ class ApplicationController extends Controller
     public function updatePropertyDetails(Request $request, $id)
     {
         $request->validate([
-            'property_name' => 'required|string|max:255',
-            'property_id' => 'nullable',
-            'property_code' => 'nullable|string|max:50',
+            'property_id' => 'required|exists:properties,id',
             'property_type' => 'nullable|string|max:255',
             'desired_move_date' => 'nullable|date',
             'source' => 'nullable|string|max:255',
             'source_other' => 'nullable|string|max:255',
+        ], [
+            'property_id.required' => 'Please select an available property from the suggestions list. Manual typing is not permitted.',
+            'property_id.exists' => 'The selected property is not available. Please try searching by address or property code and choose from the suggestions.',
         ]);
 
         $applicant = Applicant::findOrFail($id);
+        $property = Property::findOrFail($request->property_id);
 
         $applicant->update([
-            'property_id' => $request->property_id !== null && $request->property_id !== '' ? $request->property_id : null,
-            'property_code' => $request->property_code !== null && $request->property_code !== '' ? $request->property_code : null,
-            'property_name' => $request->property_name,
+            'property_id' => $property->id,
+            'property_code' => $property->property_code,
+            'property_name' => $property->property_name,
             'property_type' => $request->property_type,
             'desired_move_date' => $request->filled('desired_move_date') ? $request->desired_move_date : null,
             'source' => $request->source,

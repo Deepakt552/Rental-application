@@ -72,10 +72,26 @@ export default function ApplicationDetail({ applicant }) {
 
     // Property Edit Modal states
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
-    const [propertyFormData, setPropertyFormData] = useState({
-        property_id: applicant.property_id || '',
-        property_code: applicant.property?.property_code || applicant.property_code || '',
+    const initialApplicantProp = (applicant.property && applicant.property.id) ? {
+        id: applicant.property.id,
+        property_name: applicant.property.property_name,
+        property_code: applicant.property.property_code || applicant.property_code || '',
+        address: applicant.property.address || '',
+        property_type: applicant.property.property_type
+    } : (applicant.property_id ? {
+        id: applicant.property_id,
         property_name: applicant.property_name || '',
+        property_code: applicant.property_code || '',
+        property_type: applicant.property_type
+    } : null);
+
+    const [selectedProperty, setSelectedProperty] = useState(initialApplicantProp);
+    const [isPropertySearchFocused, setIsPropertySearchFocused] = useState(false);
+
+    const [propertyFormData, setPropertyFormData] = useState({
+        property_id: initialApplicantProp?.id ? String(initialApplicantProp.id) : '',
+        property_code: initialApplicantProp?.property_code ? String(initialApplicantProp.property_code) : (applicant.property_code ? String(applicant.property_code) : ''),
+        property_name: initialApplicantProp?.property_name || applicant.property_name || '',
         property_type: applicant.property_type || '',
         desired_move_date: applicant.desired_move_date ? (applicant.desired_move_date.includes('T') ? applicant.desired_move_date.split('T')[0] : applicant.desired_move_date) : '',
         source: applicant.source || '',
@@ -129,45 +145,64 @@ export default function ApplicationDetail({ applicant }) {
     }, [propertySearchQuery, companyName]);
 
     const handleSelectProperty = (property) => {
+        setSelectedProperty(property);
         const types = Array.isArray(property.property_type) ? property.property_type : (property.property_type ? [property.property_type] : []);
         setAvailablePropertyTypes(types);
         setPropertyFormData(prev => ({
             ...prev,
-            property_id: property.id ? String(property.id) : prev.property_id,
-            property_code: property.property_code ? String(property.property_code) : prev.property_code,
+            property_id: String(property.id),
+            property_code: property.property_code ? String(property.property_code) : '',
             property_name: property.property_name,
             property_type: types.length > 0 ? types[0] : prev.property_type
         }));
         setPropertySearchQuery(property.property_name);
         setPropertySearchResults([]);
+        setIsPropertySearchFocused(false);
     };
 
     const handleOpenPropertyModal = () => {
         const initialDate = applicant.desired_move_date
             ? (applicant.desired_move_date.includes('T') ? applicant.desired_move_date.split('T')[0] : applicant.desired_move_date)
             : '';
-        setPropertyFormData({
-            property_id: applicant.property_id ? String(applicant.property_id) : '',
-            property_code: applicant.property?.property_code ? String(applicant.property.property_code) : (applicant.property_code ? String(applicant.property_code) : ''),
+        const currentProp = (applicant.property && applicant.property.id) ? {
+            id: applicant.property.id,
+            property_name: applicant.property.property_name,
+            property_code: applicant.property.property_code || applicant.property_code || '',
+            address: applicant.property.address || '',
+            property_type: applicant.property.property_type
+        } : (applicant.property_id ? {
+            id: applicant.property_id,
             property_name: applicant.property_name || '',
+            property_code: applicant.property_code || '',
+            property_type: applicant.property_type
+        } : null);
+
+        setSelectedProperty(currentProp);
+        setPropertyFormData({
+            property_id: currentProp?.id ? String(currentProp.id) : '',
+            property_code: currentProp?.property_code ? String(currentProp.property_code) : (applicant.property_code ? String(applicant.property_code) : ''),
+            property_name: currentProp?.property_name || applicant.property_name || '',
             property_type: applicant.property_type || '',
             desired_move_date: initialDate,
             source: applicant.source || '',
             source_other: applicant.source_other || '',
         });
-        setPropertySearchQuery(applicant.property_name || '');
+        setPropertySearchQuery(currentProp?.property_name || applicant.property_name || '');
         setPropertySearchResults([]);
+        setIsPropertySearchFocused(false);
         setIsPropertyModalOpen(true);
     };
 
     const handleSavePropertyDetails = (e) => {
         if (e) e.preventDefault();
-        if (!propertyFormData.property_name?.trim()) {
-            toast.error('Property Name is required');
+
+        if (!selectedProperty || !propertyFormData.property_id) {
+            toast.error('Property not available. Manual typing is not permitted. Please select an available property from the suggestions list.');
             return;
         }
-        if (propertyFormData.property_code && !/^\d+$/.test(String(propertyFormData.property_code).trim())) {
-            toast.error('Property Code must contain only numbers');
+
+        if (!propertyFormData.property_name?.trim()) {
+            toast.error('Property Name is required. Please select a property from the suggestions.');
             return;
         }
         if (propertyFormData.source === 'Other' && !propertyFormData.source_other?.trim()) {
@@ -1624,44 +1659,107 @@ export default function ApplicationDetail({ applicant }) {
                                     <input
                                         type="text"
                                         value={propertySearchQuery}
+                                        onFocus={() => setIsPropertySearchFocused(true)}
+                                        onBlur={() => setTimeout(() => setIsPropertySearchFocused(false), 250)}
                                         onChange={(e) => {
-                                            setPropertySearchQuery(e.target.value);
-                                            setPropertyFormData(prev => ({
-                                                ...prev,
-                                                property_name: e.target.value
-                                            }));
+                                            const val = e.target.value;
+                                            setPropertySearchQuery(val);
+                                            setIsPropertySearchFocused(true);
+                                            if (selectedProperty && selectedProperty.property_name !== val) {
+                                                setSelectedProperty(null);
+                                                setPropertyFormData(prev => ({
+                                                    ...prev,
+                                                    property_id: '',
+                                                    property_code: '',
+                                                    property_name: ''
+                                                }));
+                                            }
                                         }}
-                                        placeholder={propertySearchLoading ? "Searching properties..." : "Search or enter property name..."}
+                                        placeholder={propertySearchLoading ? "Searching properties..." : "Search by property name, address, or code..."}
                                         className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-700/80 pl-10 pr-3 text-xs focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all"
                                         required
                                     />
                                 </div>
 
                                 {/* Results dropdown */}
-                                {propertySearchResults.length > 0 && (
-                                    <div className="absolute z-50 mt-1 w-full bg-white dark:bg-[#131c2e] border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                                {isPropertySearchFocused && propertySearchResults.length > 0 && (
+                                    <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white dark:bg-[#131c2e] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl max-h-56 overflow-y-auto">
                                         {propertySearchResults.map((prop) => (
                                             <button
                                                 key={prop.id}
                                                 type="button"
-                                                onClick={() => handleSelectProperty(prop)}
-                                                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex flex-col transition-colors cursor-pointer"
+                                                onMouseDown={() => handleSelectProperty(prop)}
+                                                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex flex-col transition-colors cursor-pointer group"
                                             >
-                                                <span className="font-bold text-xs text-slate-850 dark:text-slate-100 flex items-center gap-2">
-                                                    <span>{prop.property_name}</span>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                                                        {prop.property_name}
+                                                    </span>
                                                     {prop.property_code && (
-                                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border dark:border-slate-700 text-slate-600 dark:text-slate-300">
                                                             Code: {prop.property_code}
                                                         </span>
                                                     )}
-                                                </span>
-                                                <span className="text-[10px] text-slate-400 dark:text-slate-400 mt-0.5">
-                                                    {Array.isArray(prop.property_type) ? prop.property_type.join(', ') : (prop.property_type || 'Residential')}
-                                                    {prop.address ? ` • ${prop.address}` : ''}
-                                                </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                                                    {prop.address && (
+                                                        <span className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                                                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                                            {prop.address}
+                                                        </span>
+                                                    )}
+                                                    {prop.address && prop.property_type && <span>•</span>}
+                                                    {prop.property_type && (
+                                                        <span>{Array.isArray(prop.property_type) ? prop.property_type.join(', ') : prop.property_type}</span>
+                                                    )}
+                                                </div>
                                             </button>
                                         ))}
                                     </div>
+                                )}
+
+                                {/* Error / No Results Dropdown */}
+                                {isPropertySearchFocused && !propertySearchLoading && propertySearchQuery.trim().length >= 2 && propertySearchResults.length === 0 && (
+                                    <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white dark:bg-[#131c2e] border border-amber-300 dark:border-amber-700/80 rounded-xl shadow-2xl p-3.5 text-xs">
+                                        <div className="flex items-start gap-2.5">
+                                            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                            <div>
+                                                <p className="font-bold text-rose-600 dark:text-rose-400">Property not available</p>
+                                                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
+                                                    No matching property found. Please try searching by <strong>address</strong> or <strong>property code</strong>.
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 italic">
+                                                    Manual property typing is not permitted. You must select an available property from the suggestions.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Selected Property Status Badge */}
+                                {selectedProperty && propertyFormData.property_id ? (
+                                    <div className="mt-2 p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-emerald-900 dark:text-emerald-200 truncate">
+                                                    {selectedProperty.property_name}
+                                                </p>
+                                                <p className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                    {selectedProperty.property_code && <span>Code: <strong>{selectedProperty.property_code}</strong></span>}
+                                                    {selectedProperty.address && <span>• {selectedProperty.address}</span>}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-md shrink-0">
+                                            Verified
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-1.5 flex items-center gap-1">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                        Please select an available property from suggestions. Manual typing is not allowed.
+                                    </p>
                                 )}
                             </div>
 
@@ -1671,29 +1769,18 @@ export default function ApplicationDetail({ applicant }) {
                                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                                         Property Code
                                     </label>
-                                    <span className="text-[10px] text-slate-400 font-medium">Numbers only</span>
+                                    <span className="text-[10px] text-slate-400 font-medium">Auto-populated</span>
                                 </div>
                                 <div className="relative">
                                     <Hash className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
                                     <input
                                         type="text"
-                                        inputMode="numeric"
-                                        pattern="[0-9]*"
+                                        readOnly
                                         value={propertyFormData.property_code || ''}
-                                        onChange={(e) => {
-                                            const numericOnly = e.target.value.replace(/\D/g, '');
-                                            setPropertyFormData(prev => ({
-                                                ...prev,
-                                                property_code: numericOnly
-                                            }));
-                                        }}
-                                        placeholder="e.g. 101"
-                                        className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-700/80 pl-10 pr-3 text-xs focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all"
+                                        placeholder="Auto-filled from selected property"
+                                        className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-700/80 pl-10 pr-3 text-xs bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 outline-none cursor-not-allowed"
                                     />
                                 </div>
-                                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                    Numeric identifier only. Auto-filled on property selection or can be entered manually.
-                                </p>
                             </div>
 
                             {/* Property Type */}
