@@ -217,12 +217,12 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                     source_other: source === 'Other' ? sourceOther.trim() : null
                 })
             }).then(res => res ? res.json() : null)
-              .then(data => {
-                  if (data && data.success) {
-                      toast.success('Property details updated successfully!');
-                  }
-              })
-              .catch(err => console.error(err));
+                .then(data => {
+                    if (data && data.success) {
+                        toast.success('Property details updated successfully!');
+                    }
+                })
+                .catch(err => console.error(err));
         }
 
         setShowPropertyModal(false);
@@ -407,86 +407,86 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
     };
 
     // Compress image files client-side before uploading (60% quality = ~40%+ size reduction)
- const compressImage = (file) => {
-    return new Promise((resolve) => {
-        if (!file || !file.type?.startsWith("image/")) {
-            return resolve(file);
-        }
+    const compressImage = (file) => {
+        return new Promise((resolve) => {
+            if (!file || !file.type?.startsWith("image/")) {
+                return resolve(file);
+            }
 
-        const reader = new FileReader();
+            const reader = new FileReader();
 
-        reader.onload = (e) => {
-            const img = new Image();
+            reader.onload = (e) => {
+                const img = new Image();
 
-            img.onload = () => {
-                const canvas = document.createElement("canvas");
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
 
-                let width = img.width;
-                let height = img.height;
+                    let width = img.width;
+                    let height = img.height;
 
-                const MAX_WIDTH = 1920;
-                const MAX_HEIGHT = 1920;
+                    const MAX_WIDTH = 1920;
+                    const MAX_HEIGHT = 1920;
 
-                // Resize only if image is larger
-                if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-                    const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
-                    width = Math.round(width * ratio);
-                    height = Math.round(height * ratio);
-                }
+                    // Resize only if image is larger
+                    if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+                        const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
 
-                canvas.width = width;
-                canvas.height = height;
+                    canvas.width = width;
+                    canvas.height = height;
 
-                const ctx = canvas.getContext("2d");
+                    const ctx = canvas.getContext("2d");
 
-                // Better rendering for text
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = "high";
+                    // Better rendering for text
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = "high";
 
-                ctx.drawImage(img, 0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
 
-                // Preserve PNG if uploaded
-                const outputType =
-                    file.type === "image/png" ? "image/png" : "image/jpeg";
+                    // Preserve PNG if uploaded
+                    const outputType =
+                        file.type === "image/png" ? "image/png" : "image/jpeg";
 
-                const quality = 0.9; // 90% quality
+                    const quality = 0.9; // 90% quality
 
-                canvas.toBlob(
-                    (blob) => {
-                        if (!blob) return resolve(file);
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob) return resolve(file);
 
-                        // Don't use compressed file if it's larger
-                        if (blob.size >= file.size) {
-                            return resolve(file);
-                        }
+                            // Don't use compressed file if it's larger
+                            if (blob.size >= file.size) {
+                                return resolve(file);
+                            }
 
-                        const extension =
-                            outputType === "image/png" ? "png" : "jpg";
+                            const extension =
+                                outputType === "image/png" ? "png" : "jpg";
 
-                        const name =
-                            file.name.substring(0, file.name.lastIndexOf(".")) ||
-                            file.name;
+                            const name =
+                                file.name.substring(0, file.name.lastIndexOf(".")) ||
+                                file.name;
 
-                        resolve(
-                            new File([blob], `${name}.${extension}`, {
-                                type: outputType,
-                                lastModified: Date.now(),
-                            })
-                        );
-                    },
-                    outputType,
-                    quality
-                );
+                            resolve(
+                                new File([blob], `${name}.${extension}`, {
+                                    type: outputType,
+                                    lastModified: Date.now(),
+                                })
+                            );
+                        },
+                        outputType,
+                        quality
+                    );
+                };
+
+                img.onerror = () => resolve(file);
+                img.src = e.target.result;
             };
 
-            img.onerror = () => resolve(file);
-            img.src = e.target.result;
-        };
-
-        reader.onerror = () => resolve(file);
-        reader.readAsDataURL(file);
-    });
-};
+            reader.onerror = () => resolve(file);
+            reader.readAsDataURL(file);
+        });
+    };
     // Direct Upload Handler: Compresses images & uploads file immediately to server on selection
     const handleDirectFileUpload = async (docType, filesToUpload, description = '') => {
         const idToUse = applicantId || localStorage.getItem('applicant_id');
@@ -726,7 +726,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     setUploadedDocuments(r.documents_list);
                                 }
                             })
-                            .catch(() => {});
+                            .catch(() => { });
                     }
 
                     setIsSaving(false);
@@ -1467,7 +1467,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                         }
                                     }
                                 })
-                                .catch(() => {});
+                                .catch(() => { });
                         }
                         if (result.property_type) {
                             setSelectedPropertyType(result.property_type);
@@ -3089,47 +3089,46 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                     )}
 
                                     {/* ── Upload button (always shown so user can add/replace) ──── */}
-                                    <label className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition-all border border-dashed ${
-                                         uploadingDocs[doc.id]
-                                             ? 'bg-blue-50 text-blue-600 border-blue-300 pointer-events-none'
-                                             : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-blue-600 border-slate-200'
-                                     }`}>
-                                         {uploadingDocs[doc.id] ? (
-                                             <>
-                                                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                                 <span>Compressing & Uploading...</span>
-                                             </>
-                                         ) : (
-                                             <>
-                                                 <Upload className="w-3.5 h-3.5" />
-                                                 <span>
-                                                     {alreadyUploaded.length > 0 || isFileSelected
-                                                         ? (doc.multiple ? 'Add More' : 'Replace File')
-                                                         : (doc.multiple ? 'Upload Documents' : 'Upload Document')}
-                                                 </span>
-                                             </>
-                                         )}
-                                         <input
-                                             type="file"
-                                             className="hidden"
-                                             accept=".pdf,.jpg,.jpeg,.png"
-                                             multiple={doc.multiple}
-                                             disabled={uploadingDocs[doc.id]}
-                                             onChange={async (e) => {
-                                                 const files = Array.from(e.target.files);
-                                                 if (files.length > 0) {
-                                                     const invalidFiles = files.filter(f => f.size > 15 * 1024 * 1024);
-                                                     if (invalidFiles.length > 0) {
-                                                         toast.error('Original file size must be less than 15MB');
-                                                         return;
-                                                     }
-                                                     setErrors(prev => { const err = { ...prev }; delete err[`documents.${doc.id}`]; return err; });
-                                                     await handleDirectFileUpload(doc.id, files);
-                                                     e.target.value = '';
-                                                 }
-                                             }}
-                                         />
-                                     </label>
+                                    <label className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition-all border border-dashed ${uploadingDocs[doc.id]
+                                        ? 'bg-blue-50 text-blue-600 border-blue-300 pointer-events-none'
+                                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-blue-600 border-slate-200'
+                                        }`}>
+                                        {uploadingDocs[doc.id] ? (
+                                            <>
+                                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                                <span>Compressing & Uploading...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-3.5 h-3.5" />
+                                                <span>
+                                                    {alreadyUploaded.length > 0 || isFileSelected
+                                                        ? (doc.multiple ? 'Add More' : 'Replace File')
+                                                        : (doc.multiple ? 'Upload Documents' : 'Upload Document')}
+                                                </span>
+                                            </>
+                                        )}
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            multiple={doc.multiple}
+                                            disabled={uploadingDocs[doc.id]}
+                                            onChange={async (e) => {
+                                                const files = Array.from(e.target.files);
+                                                if (files.length > 0) {
+                                                    const invalidFiles = files.filter(f => f.size > 15 * 1024 * 1024);
+                                                    if (invalidFiles.length > 0) {
+                                                        toast.error('Original file size must be less than 15MB');
+                                                        return;
+                                                    }
+                                                    setErrors(prev => { const err = { ...prev }; delete err[`documents.${doc.id}`]; return err; });
+                                                    await handleDirectFileUpload(doc.id, files);
+                                                    e.target.value = '';
+                                                }
+                                            }}
+                                        />
+                                    </label>
                                 </div>
                             </div>
                         );
@@ -3166,35 +3165,34 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             className="w-full rounded-xl border-slate-200 bg-slate-50/50 mb-4 text-sm focus:ring-blue-500 focus:border-blue-500"
                         />
                         <div className="relative">
-                            <label className={`flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed text-slate-600 text-sm font-bold cursor-pointer transition-all ${
-                                 uploadingDocs['other_source_of_income']
-                                     ? 'bg-blue-50 border-blue-300 text-blue-600 pointer-events-none'
-                                     : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-blue-300'
-                             }`}>
-                                 <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400">
-                                     {uploadingDocs['other_source_of_income'] ? (
-                                         <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
-                                     ) : (
-                                         <Upload className="w-5 h-5" />
-                                     )}
-                                 </div>
-                                 <span className="mt-2 text-xs font-bold text-slate-700">
-                                     {uploadingDocs['other_source_of_income']
-                                         ? 'Compressing & Uploading file...'
-                                         : <>Drop your file here, or <span className="text-blue-600">browse</span></>}
-                                 </span>
-                                 <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" disabled={uploadingDocs['other_source_of_income']} onChange={async (e) => {
-                                     const file = e.target.files[0];
-                                     if (file) {
-                                         if (file.size > 15 * 1024 * 1024) {
-                                             toast.error('File size must be under 15MB');
-                                             return;
-                                         }
-                                         await handleDirectFileUpload('other_source_of_income', file, formData.documents.other_source_of_income.description);
-                                         e.target.value = '';
-                                     }
-                                 }} />
-                             </label>
+                            <label className={`flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed text-slate-600 text-sm font-bold cursor-pointer transition-all ${uploadingDocs['other_source_of_income']
+                                ? 'bg-blue-50 border-blue-300 text-blue-600 pointer-events-none'
+                                : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-blue-300'
+                                }`}>
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400">
+                                    {uploadingDocs['other_source_of_income'] ? (
+                                        <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                                    ) : (
+                                        <Upload className="w-5 h-5" />
+                                    )}
+                                </div>
+                                <span className="mt-2 text-xs font-bold text-slate-700">
+                                    {uploadingDocs['other_source_of_income']
+                                        ? 'Compressing & Uploading file...'
+                                        : <>Drop your file here, or <span className="text-blue-600">browse</span></>}
+                                </span>
+                                <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" disabled={uploadingDocs['other_source_of_income']} onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (file) {
+                                        if (file.size > 15 * 1024 * 1024) {
+                                            toast.error('File size must be under 15MB');
+                                            return;
+                                        }
+                                        await handleDirectFileUpload('other_source_of_income', file, formData.documents.other_source_of_income.description);
+                                        e.target.value = '';
+                                    }
+                                }} />
+                            </label>
                             {errors['documents.other_source_of_income'] && <p className="text-red-500 text-[10px] mt-1 font-bold uppercase tracking-tight">{errors['documents.other_source_of_income']}</p>}
                         </div>
                     </div>
@@ -3221,35 +3219,34 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                             className="w-full rounded-xl border-slate-200 bg-slate-50/50 mb-4 text-sm focus:ring-blue-500 focus:border-blue-500"
                         />
                         <div className="relative">
-                            <label className={`flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed text-slate-600 text-sm font-bold cursor-pointer transition-all ${
-                                 uploadingDocs['other']
-                                     ? 'bg-blue-50 border-blue-300 text-blue-600 pointer-events-none'
-                                     : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-blue-300'
-                             }`}>
-                                 <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400">
-                                     {uploadingDocs['other'] ? (
-                                         <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
-                                     ) : (
-                                         <Upload className="w-5 h-5" />
-                                     )}
-                                 </div>
-                                 <span className="mt-2 text-xs font-bold text-slate-700">
-                                     {uploadingDocs['other']
-                                         ? 'Compressing & Uploading file...'
-                                         : <>Drop your file here, or <span className="text-blue-600">browse</span></>}
-                                 </span>
-                                 <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" disabled={uploadingDocs['other']} onChange={async (e) => {
-                                     const file = e.target.files[0];
-                                     if (file) {
-                                         if (file.size > 15 * 1024 * 1024) {
-                                             toast.error('File size must be under 15MB');
-                                             return;
-                                         }
-                                         await handleDirectFileUpload('other', file, formData.documents.other.description);
-                                         e.target.value = '';
-                                     }
-                                 }} />
-                             </label>
+                            <label className={`flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed text-slate-600 text-sm font-bold cursor-pointer transition-all ${uploadingDocs['other']
+                                ? 'bg-blue-50 border-blue-300 text-blue-600 pointer-events-none'
+                                : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-blue-300'
+                                }`}>
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400">
+                                    {uploadingDocs['other'] ? (
+                                        <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                                    ) : (
+                                        <Upload className="w-5 h-5" />
+                                    )}
+                                </div>
+                                <span className="mt-2 text-xs font-bold text-slate-700">
+                                    {uploadingDocs['other']
+                                        ? 'Compressing & Uploading file...'
+                                        : <>Drop your file here, or <span className="text-blue-600">browse</span></>}
+                                </span>
+                                <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" disabled={uploadingDocs['other']} onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (file) {
+                                        if (file.size > 15 * 1024 * 1024) {
+                                            toast.error('File size must be under 15MB');
+                                            return;
+                                        }
+                                        await handleDirectFileUpload('other', file, formData.documents.other.description);
+                                        e.target.value = '';
+                                    }
+                                }} />
+                            </label>
                             {errors['documents.other.file'] && (
                                 <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">
                                     {errors['documents.other.file']}
@@ -3401,7 +3398,6 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                         <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
                                             Property Name <span className="text-red-500">*</span>
                                         </label>
-                                        <span className="text-[10px] text-slate-400 font-medium">Select from suggestions only</span>
                                     </div>
                                     <div className="relative">
                                         <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
@@ -3498,10 +3494,7 @@ export default function ApplicationForm({ sessionId: propSessionId }) {
                                             </span>
                                         </div>
                                     ) : (
-                                        <p className="text-[11px] text-amber-600 font-medium mt-1.5 flex items-center gap-1">
-                                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                            Please select an available property from suggestions. Manual typing is not allowed.
-                                        </p>
+                                        <></>
                                     )}
                                 </div>
 

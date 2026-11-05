@@ -1252,7 +1252,7 @@ export default function ApplicationDetail({ applicant }) {
                                                             </span>
                                                         </div>
                                                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                                                            Complete application packet combining all sections, signed background disclosures, and tenant authorizations.
+                                                            Complete application packet combining all sections, signed background disclosures, payment invoice, and tenant authorizations.
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1756,10 +1756,7 @@ export default function ApplicationDetail({ applicant }) {
                                         </span>
                                     </div>
                                 ) : (
-                                    <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-1.5 flex items-center gap-1">
-                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                        Please select an available property from suggestions. Manual typing is not allowed.
-                                    </p>
+                                    <></>
                                 )}
                             </div>
 

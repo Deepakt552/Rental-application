@@ -122,7 +122,51 @@ class PDFService
                 }
             }
 
-            // 3. Add uploaded Documents
+            // 3. Add Payment Invoice PDF if available
+            $payments = null;
+            if ($applicant->relationLoaded('payments') && $applicant->payments && $applicant->payments->count() > 0) {
+                $completed = $applicant->payments->where('status', 'completed');
+                $payments = $completed->isNotEmpty() ? $completed : $applicant->payments->sortByDesc('id')->take(1);
+            }
+
+            if (!$payments || $payments->isEmpty()) {
+                $payments = \App\Models\Payment::where('applicant_id', $applicant->id)
+                    ->where('status', 'completed')
+                    ->orderBy('id', 'asc')
+                    ->get();
+
+                if ($payments->isEmpty()) {
+                    $payments = \App\Models\Payment::where('applicant_id', $applicant->id)
+                        ->latest()
+                        ->take(1)
+                        ->get();
+                }
+            }
+
+            if ($payments && $payments->isNotEmpty()) {
+                foreach ($payments as $payment) {
+                    try {
+                        $invoicePdf = Pdf::loadView('pdf.invoice', [
+                            'payment' => $payment,
+                            'applicant' => $applicant
+                        ]);
+                        $invoicePdf->setPaper('A4', 'portrait');
+
+                        $tempInvoicePdfPath = storage_path('app/temp/invoice_' . $payment->id . '_' . uniqid() . '.pdf');
+                        $tempFiles[] = $tempInvoicePdfPath;
+                        $invoicePdf->save($tempInvoicePdfPath);
+
+                        if (file_exists($tempInvoicePdfPath) && filesize($tempInvoicePdfPath) > 0) {
+                            $compatInvoicePath = $this->ensureCompatiblePdf($tempInvoicePdfPath, $tempFiles);
+                            $merger->addFile($compatInvoicePath);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning("Failed to attach invoice #{$payment->id} to merged PDF: " . $e->getMessage());
+                    }
+                }
+            }
+
+            // 4. Add uploaded Documents
             if (!$applicant->relationLoaded('documents')) {
                 $applicant->load('documents');
             }

@@ -177,7 +177,7 @@
 </head>
 <body>
     @php
-        $primaryDob = $applicant->screening->date_of_birth ?? null;
+        $primaryDob = $applicant->screening?->date_of_birth ?? null;
         $adultsCount = 0;
         if ($primaryDob && \Carbon\Carbon::parse($primaryDob)->age >= 18) {
             $adultsCount++;
@@ -192,11 +192,16 @@
         if ($adultsCount === 0) {
             $adultsCount = 1;
         }
-        $unitPrice = $payment->amount / $adultsCount;
+        $unitPrice = ($payment->amount ?? 0) / $adultsCount;
+        $isPaid = ($payment->status === 'completed' || strtolower($applicant->payment_status ?? '') === 'paid');
     @endphp
     <div class="header-stripe"></div>
     
-    <div class="paid-stamp">PAID</div>
+    @if($isPaid)
+        <div class="paid-stamp">PAID</div>
+    @else
+        <div class="paid-stamp" style="border-color: #f59e0b; color: #f59e0b;">PENDING</div>
+    @endif
 
     <div class="container">
         <table class="invoice-header">
@@ -215,8 +220,8 @@
                     <h1>INVOICE</h1>
                     <p>TRANS-ID: #PAY-{{ str_pad($payment->id, 6, '0', STR_PAD_LEFT) }}</p>
                     <div style="margin-top: 10px; font-size: 12px; color: #64748b;">
-                        Date: {{ $payment->created_at->format('M d, Y') }}<br>
-                        Time: {{ $payment->created_at->format('h:i A') }}
+                        Date: {{ $payment->created_at ? $payment->created_at->format('M d, Y') : now()->format('M d, Y') }}<br>
+                        Time: {{ $payment->created_at ? $payment->created_at->format('h:i A') : now()->format('h:i A') }}
                     </div>
                 </td>
             </tr>
@@ -226,13 +231,13 @@
             <tr>
                 <td>
                     <div class="label">Billed To</div>
-                    <div class="value-large">{{ $applicant->personalInformation->first_name }} {{ $applicant->personalInformation->last_name }}</div>
-                    <div class="value" style="margin-top: 4px;">{{ $applicant->email }}</div>
-                    <div class="value">{{ $applicant->personalInformation->phone }}</div>
+                    <div class="value-large">{{ $applicant->personalInformation?->first_name ?? '' }} {{ $applicant->personalInformation?->last_name ?? '' }}</div>
+                    <div class="value" style="margin-top: 4px;">{{ $applicant->email ?? '' }}</div>
+                    <div class="value">{{ $applicant->personalInformation?->phone ?? '' }}</div>
                 </td>
                 <td>
                     <div class="label">Payment Status</div>
-                    <div class="value" style="color: #22c55e;">&bull; Transaction Successful</div>
+                    <div class="value" style="color: {{ $isPaid ? '#22c55e' : '#f59e0b' }};">&bull; {{ $isPaid ? 'Transaction Successful' : 'Payment Pending' }}</div>
                     <div class="value">Card Ending in: ****</div>
                 </td>
                 <td style="text-align: right;">
