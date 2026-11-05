@@ -1,19 +1,50 @@
 import { useState } from 'react';
 import { useForm, router } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Save, ArrowLeft, Mail, Lock, User as UserIcon, Shield } from 'lucide-react';
+import { Save, ArrowLeft, Mail, Lock, User as UserIcon, Shield, Building, Search, X } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
-export default function Edit({ user }) {
+export default function Edit({ user, properties = [] }) {
     const { data, setData, put, processing, errors } = useForm({
         name: user.name,
         email: user.email,
         password: '',
         password_confirmation: '',
         role: user.role,
+        property_ids: user.property_ids || [],
+        can_edit_applications: Boolean(user.can_edit_applications),
     });
 
     const [showPassword, setShowPassword] = useState(false);
+    const [propertySearch, setPropertySearch] = useState('');
+
+    const toggleProperty = (id) => {
+        const current = data.property_ids || [];
+        if (current.includes(id)) {
+            setData('property_ids', current.filter(pId => pId !== id));
+        } else {
+            setData('property_ids', [...current, id]);
+        }
+    };
+
+    const selectAllFiltered = () => {
+        const filteredIds = filteredProperties.map(p => p.id);
+        const merged = Array.from(new Set([...(data.property_ids || []), ...filteredIds]));
+        setData('property_ids', merged);
+    };
+
+    const clearAllProperties = () => {
+        setData('property_ids', []);
+    };
+
+    const filteredProperties = properties.filter(p => {
+        const term = propertySearch.toLowerCase();
+        return (
+            p.property_name?.toLowerCase().includes(term) ||
+            p.property_code?.toLowerCase().includes(term) ||
+            p.company_name?.toLowerCase().includes(term)
+        );
+    });
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -138,9 +169,150 @@ export default function Edit({ user }) {
                                         <option value="user">Regular User</option>
                                         <option value="admin">Administrator</option>
                                         <option value="superadmin">Super Admin</option>
+                                        <option value="property_manager">Property Manager</option>
                                     </select>
                                 </div>
                             </div>
+
+                            {/* Property Selection for Property Manager */}
+                            {data.role === 'property_manager' && (
+                                <div className="p-4 rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50/50 dark:bg-sky-950/20 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-sm font-bold text-slate-800 dark:text-slate-200">
+                                            Assign Properties <span className="text-red-500">*</span>
+                                        </label>
+                                        <span className="text-xs text-sky-700 dark:text-sky-400 font-semibold">
+                                            {data.property_ids?.length || 0} propert{data.property_ids?.length === 1 ? 'y' : 'ies'} selected
+                                        </span>
+                                    </div>
+
+                                    {/* Selected Properties Badges */}
+                                    {data.property_ids?.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 pt-1">
+                                            {data.property_ids.map(id => {
+                                                const prop = properties.find(p => p.id === id);
+                                                if (!prop) return null;
+                                                return (
+                                                    <span
+                                                        key={id}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#0e4a81] text-white shadow-2xs"
+                                                    >
+                                                        <Building className="w-3.5 h-3.5" />
+                                                        {prop.property_name}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleProperty(id)}
+                                                            className="ml-1 hover:text-red-300 transition-colors cursor-pointer"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* Search input for properties */}
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search properties by name or code..."
+                                            value={propertySearch}
+                                            onChange={(e) => setPropertySearch(e.target.value)}
+                                            className="pl-9 pr-3 py-1.5 w-full text-xs rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-[#0e4a81] focus:border-[#0e4a81]"
+                                        />
+                                    </div>
+
+                                    {/* Quick select buttons */}
+                                    <div className="flex items-center justify-between text-xs">
+                                        <button
+                                            type="button"
+                                            onClick={selectAllFiltered}
+                                            className="text-[#0e4a81] dark:text-sky-400 font-bold hover:underline cursor-pointer"
+                                        >
+                                            Select All ({filteredProperties.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={clearAllProperties}
+                                            className="text-slate-500 dark:text-slate-400 font-bold hover:underline cursor-pointer"
+                                        >
+                                            Clear All
+                                        </button>
+                                    </div>
+
+                                    {/* Properties checklist */}
+                                    <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                                        {filteredProperties.length === 0 ? (
+                                            <div className="p-3 text-center text-xs text-slate-400">
+                                                No properties match your search
+                                            </div>
+                                        ) : (
+                                            filteredProperties.map(property => {
+                                                const isSelected = data.property_ids?.includes(property.id);
+                                                return (
+                                                    <label
+                                                        key={property.id}
+                                                        className={`flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer text-xs transition-colors ${
+                                                            isSelected ? 'bg-sky-50/60 dark:bg-sky-950/40 font-bold' : ''
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => toggleProperty(property.id)}
+                                                                className="rounded border-slate-300 text-[#0e4a81] focus:ring-[#0e4a81] h-4 w-4"
+                                                            />
+                                                            <div className="truncate">
+                                                                <span className="text-slate-800 dark:text-slate-200">{property.property_name}</span>
+                                                                {property.property_code && (
+                                                                    <span className="ml-1.5 text-[10px] text-slate-400">({property.property_code})</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {property.company_name && (
+                                                            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 shrink-0">
+                                                                {property.company_name}
+                                                            </span>
+                                                        )}
+                                                    </label>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+
+                                    {errors.property_ids && (
+                                        <p className="text-xs text-red-500 font-bold">{errors.property_ids}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Application Editing Permission for Property Manager */}
+                            {data.role === 'property_manager' && (
+                                <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-950/20">
+                                    <div className="flex items-start gap-3">
+                                        <div className="pt-0.5">
+                                            <input
+                                                type="checkbox"
+                                                id="can_edit_applications"
+                                                checked={!!data.can_edit_applications}
+                                                onChange={(e) => setData('can_edit_applications', e.target.checked)}
+                                                className="h-4 w-4 rounded border-slate-300 text-[#0e4a81] focus:ring-[#0e4a81] cursor-pointer"
+                                            />
+                                        </div>
+                                        <label htmlFor="can_edit_applications" className="text-sm cursor-pointer select-none">
+                                            <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                                                Allow Property Manager to edit application details
+                                            </span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">
+                                                By default, editing is disabled (read-only mode). Check this box to allow this property manager to edit application details, move-in status, comments, upload/delete documents, and manage reminders.
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Form Actions */}
                             <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">

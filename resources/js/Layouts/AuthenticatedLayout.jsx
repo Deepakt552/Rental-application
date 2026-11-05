@@ -155,12 +155,14 @@ export default function AuthenticatedLayout({ header, children }) {
             ]
         },
         {
-            title: 'Applications & Finance',
+            title: user?.role === 'property_manager' ? 'Management' : 'Applications & Finance',
             items: [
                 {
                     name: 'Applications',
                     icon: FileText,
-                    hasSubmenu: true,
+                    href: '/admin/applications',
+                    active: route().current('admin.applications.*') || window.location.pathname.startsWith('/admin/applications'),
+                    hasSubmenu: user?.role !== 'property_manager',
                     submenuItems: [
                         {
                             name: 'Triumph Applications',
@@ -187,14 +189,14 @@ export default function AuthenticatedLayout({ header, children }) {
                             filterType: 'superadmin'
                         }
                     ],
-                    roles: ['admin', 'superadmin']
+                    roles: ['admin', 'superadmin', 'property_manager']
                 },
                 {
                     name: 'Payments',
                     href: route('admin.payments.index'),
                     icon: CreditCard,
                     active: route().current('admin.payments.index'),
-                    roles: ['admin', 'superadmin']
+                    roles: ['admin', 'superadmin', 'property_manager']
                 }
             ]
         },
@@ -739,7 +741,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                 )}
 
                                 {/* Email Logs / Notification Icon */}
-                                {!isTenant && (
+                                {!isTenant && user?.role !== 'property_manager' && (
                                     <Link
                                         href={route('admin.email-logs')}
                                         title="Email Logs"
@@ -769,7 +771,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                     {user.name}
                                                 </p>
                                                 <p className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold leading-tight mt-0.5 capitalize">
-                                                    {isTenant ? 'Applicant' : (user.role || 'Admin')}
+                                                    {isTenant ? 'Applicant' : (user.role === 'property_manager' ? 'Property Manager' : (user.role === 'superadmin' ? 'Super Admin' : (user.role || 'Admin')))}
                                                 </p>
                                             </div>
                                             <ChevronDown className="hidden sm:block h-3.5 w-3.5 text-slate-400 dark:text-slate-500 group-hover:text-[#0e4a81] dark:group-hover:text-sky-400 transition-colors" />
@@ -794,7 +796,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                     Active Session
                                                 </span>
                                                 <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 capitalize">
-                                                    {isTenant ? 'Tenant' : (user.role || 'Admin')}
+                                                    {isTenant ? 'Tenant' : (user.role === 'property_manager' ? 'Property Manager' : (user.role === 'superadmin' ? 'Super Admin' : (user.role || 'Admin')))}
                                                 </span>
                                             </div>
                                         </div>

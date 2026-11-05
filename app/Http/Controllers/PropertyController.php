@@ -21,6 +21,11 @@ class PropertyController extends Controller
 
             $query = Property::query();
 
+            $user = $request->user();
+            if ($user && $user->isPropertyManager()) {
+                $query->whereIn('id', $user->getAssignedPropertyIds());
+            }
+
             if (!empty($companyName)) {
                 $query->where(function ($q) use ($companyName) {
                     $q->where('company_name', 'LIKE', "%{$companyName}%")

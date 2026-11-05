@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { router, Link } from '@inertiajs/react';
+import { router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -64,6 +64,11 @@ const LEAD_SOURCES = [
 ];
 
 export default function ApplicationDetail({ applicant }) {
+    const { auth } = usePage().props;
+    const currentUser = auth?.user;
+    const isPropertyManager = currentUser?.role === 'property_manager';
+    const canEdit = !isPropertyManager || Boolean(currentUser?.can_edit_applications);
+
     const [activeTab, setActiveTab] = useState('property');
     const [comment, setComment] = useState(applicant.admin_comment || '');
     const [saving, setSaving] = useState(false);
@@ -161,6 +166,10 @@ export default function ApplicationDetail({ applicant }) {
     };
 
     const handleOpenPropertyModal = () => {
+        if (!canEdit) {
+            toast.error('You do not have permission to edit property & move-in details.');
+            return;
+        }
         const initialDate = applicant.desired_move_date
             ? (applicant.desired_move_date.includes('T') ? applicant.desired_move_date.split('T')[0] : applicant.desired_move_date)
             : '';
@@ -195,6 +204,11 @@ export default function ApplicationDetail({ applicant }) {
 
     const handleSavePropertyDetails = (e) => {
         if (e) e.preventDefault();
+
+        if (!canEdit) {
+            toast.error('You do not have permission to edit application details.');
+            return;
+        }
 
         if (!selectedProperty || !propertyFormData.property_id) {
             toast.error('Property not available. Manual typing is not permitted. Please select an available property from the suggestions list.');
@@ -235,6 +249,10 @@ export default function ApplicationDetail({ applicant }) {
 
     const handleUploadDocument = (e) => {
         e.preventDefault();
+        if (!canEdit) {
+            toast.error('You do not have permission to upload documents.');
+            return;
+        }
         if (!uploadFile) {
             toast.error('Please select a file to upload.');
             return;
@@ -262,6 +280,10 @@ export default function ApplicationDetail({ applicant }) {
     };
 
     const handleDeleteDocument = (docId) => {
+        if (!canEdit) {
+            toast.error('You do not have permission to delete documents.');
+            return;
+        }
         if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
             router.delete(route('admin.applications.delete-document', { id: applicant.id, documentId: docId }), {
                 onSuccess: () => toast.success('Document deleted successfully'),
@@ -284,6 +306,10 @@ export default function ApplicationDetail({ applicant }) {
 
     const handleSaveComment = (e) => {
         if (e) e.preventDefault();
+        if (!canEdit) {
+            toast.error('You do not have permission to edit comments.');
+            return;
+        }
         setSaving(true);
         router.post(route('admin.applications.comment', applicant.id), {
             admin_comment: comment
@@ -303,6 +329,10 @@ export default function ApplicationDetail({ applicant }) {
     const [resending, setResending] = useState(false);
 
     const handleResend = () => {
+        if (!canEdit) {
+            toast.error('You do not have permission to resend notification.');
+            return;
+        }
         setIsConfirmModalOpen(false);
         setResending(true);
         router.post(route('admin.applications.resend', applicant.id), {}, {
@@ -326,6 +356,10 @@ export default function ApplicationDetail({ applicant }) {
     // Automated Reminders toggle
     const [togglingReminders, setTogglingReminders] = useState(false);
     const handleToggleReminders = () => {
+        if (!canEdit) {
+            toast.error('You do not have permission to manage reminder settings.');
+            return;
+        }
         const actionMsg = applicant.reminders_opted_out
             ? 'Re-enable automated reminders for this applicant?'
             : 'Deactivate automated reminders for this applicant?';
@@ -397,6 +431,10 @@ export default function ApplicationDetail({ applicant }) {
 
     const handleSendSms = (e) => {
         if (e) e.preventDefault();
+        if (!canEdit) {
+            toast.error('You do not have permission to send SMS.');
+            return;
+        }
         if (!smsPhone?.trim()) {
             toast.error('Recipient phone number is required.');
             return;
@@ -491,6 +529,10 @@ export default function ApplicationDetail({ applicant }) {
 
     const handleSendEmailReminder = (e) => {
         if (e) e.preventDefault();
+        if (!canEdit) {
+            toast.error('You do not have permission to send email reminders.');
+            return;
+        }
         if (!emailRecipient?.trim()) {
             toast.error('Recipient email address is required.');
             return;
@@ -612,6 +654,16 @@ export default function ApplicationDetail({ applicant }) {
 
                 <div className="relative max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
 
+                    {/* Read-Only Mode Banner for Property Managers without edit permission */}
+                    {isPropertyManager && !canEdit && (
+                        <div className="mb-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 flex items-center gap-3 text-amber-900 dark:text-amber-200 shadow-sm animate-fade-in">
+                            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <div className="text-xs font-medium">
+                                <span className="font-bold">Read-Only View:</span> You have view-only access for this application. Editing details, comments, uploading/deleting documents, and sending reminders are disabled by administrator.
+                            </div>
+                        </div>
+                    )}
+
                     {/* Modern Header */}
                     <div className="bg-white/95 dark:bg-[#111827]/95 rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-slate-200/80 dark:border-slate-800/90 mb-8 backdrop-blur-md overflow-hidden transition-all">
                         {/* Top Accent Gradient Bar */}
@@ -700,43 +752,51 @@ export default function ApplicationDetail({ applicant }) {
                                         </span>
                                     </div>
 
-                                    {/* Edit Property Button */}
-                                    <button
-                                        type="button"
-                                        onClick={handleOpenPropertyModal}
-                                        className="px-3.5 py-2 bg-white hover:bg-slate-50 dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800 dark:hover:border-sky-500/50 shadow-2xs hover:shadow-sm active:scale-95 cursor-pointer"
-                                    >
-                                        <Building className="w-4 h-4 text-[#0e4a81] dark:text-sky-400" />
-                                        <span>Edit Property</span>
-                                    </button>
+                                    {canEdit ? (
+                                        <>
+                                            {/* Edit Property Button */}
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenPropertyModal}
+                                                className="px-3.5 py-2 bg-white hover:bg-slate-50 dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800 dark:hover:border-sky-500/50 shadow-2xs hover:shadow-sm active:scale-95 cursor-pointer"
+                                            >
+                                                <Building className="w-4 h-4 text-[#0e4a81] dark:text-sky-400" />
+                                                <span>Edit Property</span>
+                                            </button>
 
-                                    {/* Edit Details Button */}
-                                    <a
-                                        href={applicant.type === 'superadmin' ? `/rental-application-excel?applicant_id=${applicant.id}` : `/rental-application?applicant_id=${applicant.id}`}
-                                        className="px-3.5 py-2 bg-white hover:bg-slate-50 dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800 dark:hover:border-amber-500/50 shadow-2xs hover:shadow-sm active:scale-95"
-                                    >
-                                        <Edit className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                                        <span>Edit Details</span>
-                                    </a>
+                                            {/* Edit Details Button */}
+                                            <a
+                                                href={applicant.type === 'superadmin' ? `/rental-application-excel?applicant_id=${applicant.id}` : `/rental-application?applicant_id=${applicant.id}`}
+                                                className="px-3.5 py-2 bg-white hover:bg-slate-50 dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800 dark:hover:border-amber-500/50 shadow-2xs hover:shadow-sm active:scale-95"
+                                            >
+                                                <Edit className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                                                <span>Edit Details</span>
+                                            </a>
 
-                                    {/* Add Note Button */}
-                                    <button
-                                        onClick={() => setIsNoteModalOpen(true)}
-                                        className="px-3.5 py-2 bg-white hover:bg-slate-50 dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800 dark:hover:border-sky-500/50 shadow-2xs hover:shadow-sm active:scale-95 cursor-pointer"
-                                    >
-                                        <FileText className="w-4 h-4 text-[#0e4a81] dark:text-sky-400" />
-                                        <span>Add Note</span>
-                                    </button>
+                                            {/* Add Note Button */}
+                                            <button
+                                                onClick={() => setIsNoteModalOpen(true)}
+                                                className="px-3.5 py-2 bg-white hover:bg-slate-50 dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800 dark:hover:border-sky-500/50 shadow-2xs hover:shadow-sm active:scale-95 cursor-pointer"
+                                            >
+                                                <FileText className="w-4 h-4 text-[#0e4a81] dark:text-sky-400" />
+                                                <span>Add Note</span>
+                                            </button>
 
-                                    {/* Resend Notification Button */}
-                                    <button
-                                        onClick={() => setIsConfirmModalOpen(true)}
-                                        disabled={resending}
-                                        className="px-4 py-2 bg-gradient-to-r from-[#0e4a81] to-sky-600 dark:from-sky-500 dark:to-blue-600 hover:from-[#0a3862] hover:to-sky-700 dark:hover:from-sky-600 dark:hover:to-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-md shadow-sky-600/20 dark:shadow-[0_0_18px_rgba(56,189,248,0.3)] disabled:opacity-50 active:scale-95 cursor-pointer"
-                                    >
-                                        <Send className="w-4 h-4" />
-                                        <span>{resending ? 'Resending...' : 'Resend Notification'}</span>
-                                    </button>
+                                            {/* Resend Notification Button */}
+                                            <button
+                                                onClick={() => setIsConfirmModalOpen(true)}
+                                                disabled={resending}
+                                                className="px-4 py-2 bg-gradient-to-r from-[#0e4a81] to-sky-600 dark:from-sky-500 dark:to-blue-600 hover:from-[#0a3862] hover:to-sky-700 dark:hover:from-sky-600 dark:hover:to-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-md shadow-sky-600/20 dark:shadow-[0_0_18px_rgba(56,189,248,0.3)] disabled:opacity-50 active:scale-95 cursor-pointer"
+                                            >
+                                                <Send className="w-4 h-4" />
+                                                <span>{resending ? 'Resending...' : 'Resend Notification'}</span>
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <span className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800/90 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 select-none">
+                                            Read-Only Mode
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
@@ -801,7 +861,7 @@ export default function ApplicationDetail({ applicant }) {
                                                 <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                                                 <span>Send Email Reminder (Disabled)</span>
                                             </button>
-                                        ) : (
+                                        ) : canEdit ? (
                                             <button
                                                 type="button"
                                                 onClick={() => handleOpenEmailModal('smart')}
@@ -810,6 +870,10 @@ export default function ApplicationDetail({ applicant }) {
                                                 <Mail className="w-4 h-4" />
                                                 <span>Send Email Reminder</span>
                                             </button>
+                                        ) : (
+                                            <span className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 select-none">
+                                                Reminders Restricted
+                                            </span>
                                         )}
                                     </div>
                                 </div>
@@ -923,14 +987,16 @@ export default function ApplicationDetail({ applicant }) {
                                 <div>
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                                         <SectionHeader title="Property Information" icon={Building} />
-                                        <button
-                                            type="button"
-                                            onClick={handleOpenPropertyModal}
-                                            className="mb-6 px-4 py-2.5 bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] dark:from-sky-600 dark:to-blue-700 hover:opacity-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-md shadow-[#0e4a81]/20 dark:shadow-[0_0_15px_rgba(56,189,248,0.25)] active:scale-95 self-start sm:self-auto cursor-pointer"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                            <span>Edit Property & Move-In</span>
-                                        </button>
+                                        {canEdit && (
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenPropertyModal}
+                                                className="mb-6 px-4 py-2.5 bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] dark:from-sky-600 dark:to-blue-700 hover:opacity-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-md shadow-[#0e4a81]/20 dark:shadow-[0_0_15px_rgba(56,189,248,0.25)] active:scale-95 self-start sm:self-auto cursor-pointer"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                                <span>Edit Property & Move-In</span>
+                                            </button>
+                                        )}
                                     </div>
                                     <DataGrid items={[
                                         { label: 'Property Code', value: applicant.property?.property_code || applicant.property_code || 'N/A', icon: Hash },
@@ -1367,15 +1433,17 @@ export default function ApplicationDetail({ applicant }) {
                                                                     <Download className="w-3.5 h-3.5 text-slate-500 dark:text-sky-400" />
                                                                     <span>Download</span>
                                                                 </a>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteDocument(doc.id)}
-                                                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 text-xs font-bold transition-all border border-rose-200 dark:border-rose-900/40 cursor-pointer shadow-2xs active:scale-95"
-                                                                    title="Delete Document"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                    <span className="hidden sm:inline">Delete</span>
-                                                                </button>
+                                                                {canEdit && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteDocument(doc.id)}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 text-xs font-bold transition-all border border-rose-200 dark:border-rose-900/40 cursor-pointer shadow-2xs active:scale-95"
+                                                                        title="Delete Document"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                        <span className="hidden sm:inline">Delete</span>
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
@@ -1391,60 +1459,62 @@ export default function ApplicationDetail({ applicant }) {
                                     </div>
 
                                     {/* Upload Document on Behalf of User */}
-                                    <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
-                                        <SectionHeader title="Upload Document on behalf of User" icon={UploadCloud} />
-                                        <form onSubmit={handleUploadDocument} className="bg-slate-50/80 dark:bg-slate-900/80 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 max-w-2xl mt-4 shadow-sm">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Document Type</label>
-                                                    <select
-                                                        value={uploadType}
-                                                        onChange={(e) => setUploadType(e.target.value)}
-                                                        className="w-full bg-white dark:bg-slate-950 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700/80 p-2.5 outline-none focus:border-sky-500 dark:focus:border-sky-500 cursor-pointer transition-all"
-                                                    >
-                                                        <option value="driving_license">Driving License</option>
-                                                        <option value="pay_check">Pay Check</option>
-                                                        <option value="bank_statement">Bank Statement</option>
-                                                        <option value="social_security_card">SSN Card</option>
-                                                        <option value="other_source_of_income">Other Source of Income</option>
-                                                        <option value="other">Other</option>
-                                                    </select>
+                                    {canEdit && (
+                                        <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+                                            <SectionHeader title="Upload Document on behalf of User" icon={UploadCloud} />
+                                            <form onSubmit={handleUploadDocument} className="bg-slate-50/80 dark:bg-slate-900/80 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 max-w-2xl mt-4 shadow-sm">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Document Type</label>
+                                                        <select
+                                                            value={uploadType}
+                                                            onChange={(e) => setUploadType(e.target.value)}
+                                                            className="w-full bg-white dark:bg-slate-950 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700/80 p-2.5 outline-none focus:border-sky-500 dark:focus:border-sky-500 cursor-pointer transition-all"
+                                                        >
+                                                            <option value="driving_license">Driving License</option>
+                                                            <option value="pay_check">Pay Check</option>
+                                                            <option value="bank_statement">Bank Statement</option>
+                                                            <option value="social_security_card">SSN Card</option>
+                                                            <option value="other_source_of_income">Other Source of Income</option>
+                                                            <option value="other">Other</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Select File</label>
+                                                        <input
+                                                            type="file"
+                                                            onChange={(e) => setUploadFile(e.target.files[0])}
+                                                            className="w-full text-xs font-bold text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-950 p-2 outline-none cursor-pointer file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-sky-50 file:text-sky-700 dark:file:bg-sky-950/60 dark:file:text-sky-300"
+                                                            required
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Select File</label>
-                                                    <input
-                                                        type="file"
-                                                        onChange={(e) => setUploadFile(e.target.files[0])}
-                                                        className="w-full text-xs font-bold text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-950 p-2 outline-none cursor-pointer file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-sky-50 file:text-sky-700 dark:file:bg-sky-950/60 dark:file:text-sky-300"
-                                                        required
-                                                    />
-                                                </div>
-                                            </div>
 
-                                            {(uploadType === 'other' || uploadType === 'other_source_of_income') && (
-                                                <div>
-                                                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Description</label>
-                                                    <input
-                                                        type="text"
-                                                        value={uploadDescription}
-                                                        onChange={(e) => setUploadDescription(e.target.value)}
-                                                        placeholder="Enter a description for this document..."
-                                                        className="w-full bg-white dark:bg-slate-950 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700/80 p-2.5 outline-none focus:border-sky-500 dark:focus:border-sky-500 transition-all"
-                                                        required
-                                                    />
-                                                </div>
-                                            )}
+                                                {(uploadType === 'other' || uploadType === 'other_source_of_income') && (
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Description</label>
+                                                        <input
+                                                            type="text"
+                                                            value={uploadDescription}
+                                                            onChange={(e) => setUploadDescription(e.target.value)}
+                                                            placeholder="Enter a description for this document..."
+                                                            className="w-full bg-white dark:bg-slate-950 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700/80 p-2.5 outline-none focus:border-sky-500 dark:focus:border-sky-500 transition-all"
+                                                            required
+                                                        />
+                                                    </div>
+                                                )}
 
-                                            <button
-                                                type="submit"
-                                                disabled={uploading}
-                                                className="px-5 py-2.5 bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] dark:from-sky-600 dark:to-blue-700 hover:opacity-95 text-white text-xs font-bold rounded-xl shadow-md dark:shadow-[0_0_15px_rgba(56,189,248,0.25)] transition-all flex items-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
-                                            >
-                                                <UploadCloud className="w-4 h-4" />
-                                                {uploading ? 'Uploading...' : 'Upload Document'}
-                                            </button>
-                                        </form>
-                                    </div>
+                                                <button
+                                                    type="submit"
+                                                    disabled={uploading}
+                                                    className="px-5 py-2.5 bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] dark:from-sky-600 dark:to-blue-700 hover:opacity-95 text-white text-xs font-bold rounded-xl shadow-md dark:shadow-[0_0_15px_rgba(56,189,248,0.25)] transition-all flex items-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
+                                                >
+                                                    <UploadCloud className="w-4 h-4" />
+                                                    {uploading ? 'Uploading...' : 'Upload Document'}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             {/* Admin Notes Tab Content */}
@@ -1458,13 +1528,15 @@ export default function ApplicationDetail({ applicant }) {
                                                 <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Active Notes</h3>
                                                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Administrative comments visible only to staff</p>
                                             </div>
-                                            <button
-                                                onClick={() => setIsNoteModalOpen(true)}
-                                                className="px-3.5 py-1.5 bg-[#0e4a81]/10 hover:bg-[#0e4a81]/25 dark:bg-sky-500/15 dark:hover:bg-sky-500/25 text-[#0e4a81] dark:text-sky-300 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 border border-[#0e4a81]/20 dark:border-sky-500/30 shadow-sm cursor-pointer"
-                                            >
-                                                <FileText className="w-3.5 h-3.5" />
-                                                Update Notes
-                                            </button>
+                                            {canEdit && (
+                                                <button
+                                                    onClick={() => setIsNoteModalOpen(true)}
+                                                    className="px-3.5 py-1.5 bg-[#0e4a81]/10 hover:bg-[#0e4a81]/25 dark:bg-sky-500/15 dark:hover:bg-sky-500/25 text-[#0e4a81] dark:text-sky-300 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 border border-[#0e4a81]/20 dark:border-sky-500/30 shadow-sm cursor-pointer"
+                                                >
+                                                    <FileText className="w-3.5 h-3.5" />
+                                                    Update Notes
+                                                </button>
+                                            )}
                                         </div>
 
                                         {comment ? (
@@ -1492,14 +1564,16 @@ export default function ApplicationDetail({ applicant }) {
                                                 <div className="text-xs font-medium leading-relaxed w-full">
                                                     <div className="flex items-center justify-between flex-wrap gap-2">
                                                         <p className="font-bold text-rose-900 dark:text-rose-200">Reminders Deactivated (Opted Out)</p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleToggleReminders}
-                                                            disabled={togglingReminders}
-                                                            className="px-2.5 py-1 bg-white dark:bg-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-800 text-rose-700 dark:text-rose-200 rounded-lg text-[11px] font-bold border border-rose-200 dark:border-rose-700 transition-all cursor-pointer shadow-sm active:scale-95"
-                                                        >
-                                                            {togglingReminders ? 'Updating...' : 'Re-enable Reminders'}
-                                                        </button>
+                                                        {canEdit && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleToggleReminders}
+                                                                disabled={togglingReminders}
+                                                                className="px-2.5 py-1 bg-white dark:bg-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-800 text-rose-700 dark:text-rose-200 rounded-lg text-[11px] font-bold border border-rose-200 dark:border-rose-700 transition-all cursor-pointer shadow-sm active:scale-95"
+                                                            >
+                                                                {togglingReminders ? 'Updating...' : 'Re-enable Reminders'}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                     <p className="text-[11px] opacity-90 mt-1.5">
                                                         Automated reminders are turned off for this tenant{applicant.reminder_opt_out_at ? ` (deactivated on ${new Date(applicant.reminder_opt_out_at).toLocaleDateString()})` : ''}. The automated system will not send any more reminder emails.
@@ -1547,14 +1621,16 @@ export default function ApplicationDetail({ applicant }) {
                                                 <div className="text-xs font-medium leading-relaxed w-full">
                                                     <div className="flex items-center justify-between flex-wrap gap-2">
                                                         <p className="font-bold text-amber-900 dark:text-amber-200">Automated Reminders: Active</p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleToggleReminders}
-                                                            disabled={togglingReminders}
-                                                            className="px-2.5 py-1 bg-white dark:bg-amber-900/50 hover:bg-amber-100 dark:hover:bg-amber-800 text-amber-800 dark:text-amber-200 rounded-lg text-[11px] font-bold border border-amber-200 dark:border-amber-700 transition-all cursor-pointer shadow-sm active:scale-95"
-                                                        >
-                                                            {togglingReminders ? 'Updating...' : 'Deactivate Reminders'}
-                                                        </button>
+                                                        {canEdit && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleToggleReminders}
+                                                                disabled={togglingReminders}
+                                                                className="px-2.5 py-1 bg-white dark:bg-amber-900/50 hover:bg-amber-100 dark:hover:bg-amber-800 text-amber-800 dark:text-amber-200 rounded-lg text-[11px] font-bold border border-amber-200 dark:border-amber-700 transition-all cursor-pointer shadow-sm active:scale-95"
+                                                            >
+                                                                {togglingReminders ? 'Updating...' : 'Deactivate Reminders'}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                     <p className="text-[11px] opacity-90 mt-1.5">
                                                         The automated scheduler sends up to 3 reminder emails (spaced 24 hours apart) to the tenant until incomplete items are finished.
@@ -1580,7 +1656,7 @@ export default function ApplicationDetail({ applicant }) {
             </div> {/* Close py-8 div */}
 
             {/* Note Editor Modal */}
-            {isNoteModalOpen && (
+            {isNoteModalOpen && canEdit && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
                     <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.85)] max-w-lg w-full overflow-hidden animate-scale-up">
                         <div className="bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] dark:from-[#0d2a4a] dark:to-[#133b66] border-b dark:border-sky-900/40 px-6 py-4 flex items-center justify-between">
@@ -1632,7 +1708,7 @@ export default function ApplicationDetail({ applicant }) {
             )}
 
             {/* Edit Property Details Modal */}
-            {isPropertyModalOpen && (
+            {isPropertyModalOpen && canEdit && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
                     <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.85)] max-w-lg w-full overflow-hidden animate-scale-up">
                         <div className="bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] dark:from-[#0d2a4a] dark:to-[#133b66] border-b dark:border-sky-900/40 px-6 py-4 flex items-center justify-between">
@@ -1888,7 +1964,7 @@ export default function ApplicationDetail({ applicant }) {
             )}
 
             {/* Resend Confirmation Modal */}
-            {isConfirmModalOpen && (
+            {isConfirmModalOpen && canEdit && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
                     <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.85)] max-w-md w-full overflow-hidden animate-scale-up">
                         <div className="bg-gradient-to-r from-[#0e4a81] to-[#1a5c9e] dark:from-[#0d2a4a] dark:to-[#133b66] border-b dark:border-sky-900/40 px-6 py-4 flex items-center justify-between">
@@ -1939,7 +2015,7 @@ export default function ApplicationDetail({ applicant }) {
             )}
 
             {/* Twilio SMS Reminder Modal */}
-            {isSmsModalOpen && (
+            {isSmsModalOpen && canEdit && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
                     <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.85)] max-w-lg w-full overflow-hidden animate-scale-up">
                         {/* Header */}
@@ -2123,7 +2199,7 @@ export default function ApplicationDetail({ applicant }) {
             )}
 
             {/* Email Reminder Modal */}
-            {isEmailModalOpen && (
+            {isEmailModalOpen && canEdit && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
                     <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.85)] max-w-lg w-full overflow-hidden animate-scale-up">
                         {/* Header */}

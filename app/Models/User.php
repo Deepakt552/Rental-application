@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'can_edit_applications',
     ];
 
     /**
@@ -45,6 +46,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'can_edit_applications' => 'boolean',
         ];
     }
      public function isAdmin()
@@ -55,6 +57,43 @@ class User extends Authenticatable
     public function isSuperAdmin()
     {
         return $this->role === 'superadmin';
+    }
+
+    public function isPropertyManager()
+    {
+        return $this->role === 'property_manager';
+    }
+
+    public function canEditApplications(): bool
+    {
+        if ($this->isAdmin() || $this->isSuperAdmin()) {
+            return true;
+        }
+        if ($this->isPropertyManager()) {
+            return (bool) $this->can_edit_applications;
+        }
+        return false;
+    }
+
+    public function properties()
+    {
+        return $this->belongsToMany(Property::class, 'property_user')->withTimestamps();
+    }
+
+    public function getAssignedPropertyIds(): array
+    {
+        if ($this->isPropertyManager()) {
+            return $this->properties()->pluck('properties.id')->toArray();
+        }
+        return [];
+    }
+
+    public function getAssignedPropertyNames(): array
+    {
+        if ($this->isPropertyManager()) {
+            return $this->properties()->pluck('properties.property_name')->toArray();
+        }
+        return [];
     }
 
     public function applicants()

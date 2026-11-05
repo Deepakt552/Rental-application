@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { router, Link } from '@inertiajs/react';
+import { router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Swal from 'sweetalert2';
 import {
@@ -34,6 +34,11 @@ export default function Applications({ applicants, filters, total_admin, total_s
     const [sortDir, setSortDir] = useState(filters.sort_dir || 'desc');
     const [updatingMoveInId, setUpdatingMoveInId] = useState(null);
     const [focusedRowId, setFocusedRowId] = useState(null);
+
+    const { auth } = usePage().props;
+    const currentUser = auth?.user;
+    const isPropertyManager = currentUser?.role === 'property_manager';
+    const canEdit = !isPropertyManager || Boolean(currentUser?.can_edit_applications);
 
     const currentType = filters.type || null;
 
@@ -96,6 +101,10 @@ export default function Applications({ applicants, filters, total_admin, total_s
     };
 
     const handleMoveInStatusChange = (applicantId, newStatus) => {
+        if (!canEdit) {
+            Swal.fire('Restricted', 'You do not have permission to edit application details.', 'warning');
+            return;
+        }
         setUpdatingMoveInId(applicantId);
         router.patch(route('admin.applications.move-in-status', applicantId), {
             move_in_status: newStatus
@@ -122,6 +131,10 @@ export default function Applications({ applicants, filters, total_admin, total_s
     };
 
     const handleDelete = (id, applicantName) => {
+        if (!canEdit) {
+            Swal.fire('Restricted', 'You do not have permission to delete applications.', 'warning');
+            return;
+        }
         Swal.fire({
             title: 'Are you sure?',
             text: `Delete the application for "${applicantName}"? This action cannot be undone.`,
@@ -820,9 +833,10 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                     <div className="relative">
                                                         <select
                                                             value={moveInVal}
-                                                            disabled={updatingMoveInId === a.id}
+                                                            disabled={!canEdit || updatingMoveInId === a.id}
                                                             onChange={(e) => handleMoveInStatusChange(a.id, e.target.value)}
-                                                            className={`text-[11px] font-bold py-1 px-2 rounded-lg border focus:outline-none transition-colors cursor-pointer w-[125px] ${moveInVal === 'moved_in'
+                                                            title={!canEdit ? 'Move-in status editing is disabled' : ''}
+                                                            className={`text-[11px] font-bold py-1 px-2 rounded-lg border focus:outline-none transition-colors w-[125px] ${!canEdit ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} ${moveInVal === 'moved_in'
                                                                 ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
                                                                 : moveInVal === 'denied'
                                                                     ? 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/40'
@@ -864,16 +878,18 @@ export default function Applications({ applicants, filters, total_admin, total_s
                                                         >
                                                             <Eye className="w-3.5 h-3.5" />
                                                         </Link>
-                                                        <button
-                                                            onClick={() => {
-                                                                const fullName = [a.personal_information?.first_name, a.personal_information?.last_name].filter(Boolean).join(' ') || 'Unknown Applicant';
-                                                                handleDelete(a.id, fullName);
-                                                            }}
-                                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-white hover:bg-rose-600 border border-slate-300/80 dark:border-slate-700 transition-colors bg-white dark:bg-slate-800/90 shadow-2xs cursor-pointer"
-                                                            title="Delete"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        {canEdit && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const fullName = [a.personal_information?.first_name, a.personal_information?.last_name].filter(Boolean).join(' ') || 'Unknown Applicant';
+                                                                    handleDelete(a.id, fullName);
+                                                                }}
+                                                                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-white hover:bg-rose-600 border border-slate-300/80 dark:border-slate-700 transition-colors bg-white dark:bg-slate-800/90 shadow-2xs cursor-pointer"
+                                                                title="Delete"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

@@ -50,7 +50,15 @@ class ApplicationController extends Controller
 
         // Authorization check
         if ($user) {
-            if (!$isAdmin && (int)$applicant->user_id !== (int)$user->id) {
+            if ($user->isPropertyManager()) {
+                $assignedIds = $user->getAssignedPropertyIds();
+                $assignedNames = $user->getAssignedPropertyNames();
+                $isAssigned = ($applicant->property_id && in_array($applicant->property_id, $assignedIds)) ||
+                              ($applicant->property_name && in_array($applicant->property_name, $assignedNames));
+                if (!$isAssigned || !$user->canEditApplications()) {
+                    return ['allowed' => false, 'error_code' => 403, 'message' => 'Unauthorized. You do not have permission to edit applications.'];
+                }
+            } elseif (!$isAdmin && (int)$applicant->user_id !== (int)$user->id) {
                 // If applicant has no user_id yet, but email matches the authenticated user, associate it
                 if ($applicant->user_id === null && !empty($applicant->email) && strtolower(trim($applicant->email)) === strtolower(trim($user->email))) {
                     $applicant->update(['user_id' => $user->id]);
@@ -1469,8 +1477,12 @@ class ApplicationController extends Controller
 
         $isAdmin = $user->isAdmin() || $user->isSuperAdmin() || in_array(strtolower($user->role ?? ''), ['admin', 'superadmin']);
         $isOwner = ((int)$user->id === (int)$applicant->user_id) || ($applicant->user_id === null && !empty($applicant->email) && strtolower(trim($applicant->email)) === strtolower(trim($user->email)));
+        $isPropertyManager = $user->isPropertyManager() && (
+            ($applicant->property_id && in_array($applicant->property_id, $user->getAssignedPropertyIds())) ||
+            ($applicant->property_name && in_array($applicant->property_name, $user->getAssignedPropertyNames()))
+        );
 
-        if (!$isAdmin && !$isOwner) {
+        if (!$isAdmin && !$isOwner && !$isPropertyManager) {
             abort(403, 'Unauthorized access to application PDF');
         }
 

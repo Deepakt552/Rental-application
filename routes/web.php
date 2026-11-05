@@ -111,6 +111,10 @@ use App\Models\Applicant;
 
 Route::get('/dashboard', function () {
     $user = auth()->user();
+    if ($user->role === 'property_manager') {
+        return redirect()->route('admin.applications.index');
+    }
+
     $isAdmin = in_array($user->role, ['admin', 'superadmin']);
 
     if ($isAdmin) {

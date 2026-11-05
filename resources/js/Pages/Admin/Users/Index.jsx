@@ -6,7 +6,7 @@ import {
     Shield, User as UserIcon, Mail, Calendar,
     MoreVertical, Inbox, Download, XCircle,
     ArrowUp, ArrowDown, ArrowUpDown, Crown, Activity,
-    X, RotateCcw
+    X, RotateCcw, Building
 } from 'lucide-react';
 
 export default function Index({ users, stats = {}, filters = {} }) {
@@ -71,9 +71,10 @@ export default function Index({ users, stats = {}, filters = {} }) {
     };
 
     const roleConfig = {
-        admin:      { cls: 'bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800', stripe: 'border-l-[#0e4a81]', icon: Shield, label: 'Admin' },
-        superadmin: { cls: 'bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800', stripe: 'border-l-purple-500', icon: Crown, label: 'Super Admin' },
-        user:       { cls: 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800', stripe: 'border-l-emerald-500', icon: UserIcon, label: 'Regular User' },
+        admin:            { cls: 'bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800', stripe: 'border-l-[#0e4a81]', icon: Shield, label: 'Admin' },
+        superadmin:       { cls: 'bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800', stripe: 'border-l-purple-500', icon: Crown, label: 'Super Admin' },
+        property_manager: { cls: 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800', stripe: 'border-l-amber-500', icon: Building, label: 'Property Manager' },
+        user:             { cls: 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800', stripe: 'border-l-emerald-500', icon: UserIcon, label: 'Regular User' },
     };
     const getRole = (r) => roleConfig[r] || { cls: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200', stripe: 'border-l-slate-400', icon: UserIcon, label: r || 'User' };
 
@@ -81,6 +82,7 @@ export default function Index({ users, stats = {}, filters = {} }) {
         { value: '', label: 'All Users', count: stats.total || 0 },
         { value: 'admin', label: 'Admins', count: stats.admins || 0 },
         { value: 'superadmin', label: 'Super Admins', count: stats.superadmin || 0 },
+        { value: 'property_manager', label: 'Property Managers', count: stats.property_managers || 0 },
         { value: 'user', label: 'Regular Users', count: stats.users || 0 },
     ];
 
@@ -332,6 +334,29 @@ export default function Index({ users, stats = {}, filters = {} }) {
                                                         <RoleIcon className="w-3 h-3" />
                                                         {rc.label}
                                                     </span>
+                                                    {user.role === 'property_manager' && (
+                                                        <div className="mt-1 space-y-0.5">
+                                                            {user.properties && user.properties.length > 0 && (
+                                                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+                                                                    <Building className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                                                    <span className="truncate max-w-[170px]" title={user.properties.map(p => p.property_name).join(', ')}>
+                                                                        {user.properties.length} propert{user.properties.length === 1 ? 'y' : 'ies'} assigned
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                {user.can_edit_applications ? (
+                                                                    <span className="inline-block text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                                                        Edit: Allowed
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-block text-[9px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                                                        Edit: Disabled
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </td>
 
                                                 {/* Member Since */}

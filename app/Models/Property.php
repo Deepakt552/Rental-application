@@ -28,4 +28,9 @@ class Property extends Model
     {
         return $this->belongsTo(User::class, 'added_by');
     }
+
+    public function managers()
+    {
+        return $this->belongsToMany(User::class, 'property_user')->withTimestamps();
+    }
 }

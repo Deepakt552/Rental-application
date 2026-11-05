@@ -187,13 +187,17 @@ class PaymentController extends Controller
     {
         $payment = Payment::with(['applicant.personalInformation'])->findOrFail($paymentId);
         
-        // Ensure the user owns this payment or is an administrator
+        // Ensure the user owns this payment or is an administrator or assigned property manager
         $user = auth()->user();
-        if ($payment->user_id !== $user->id && !$user->isAdmin() && !$user->isSuperAdmin()) {
+        $applicant = $payment->applicant;
+        $isAssignedPm = $user && $user->isPropertyManager() && $applicant && (
+            ($applicant->property_id && in_array($applicant->property_id, $user->getAssignedPropertyIds())) ||
+            ($applicant->property_name && in_array($applicant->property_name, $user->getAssignedPropertyNames()))
+        );
+
+        if ($payment->user_id !== $user->id && !$user->isAdmin() && !$user->isSuperAdmin() && !$isAssignedPm) {
             abort(403);
         }
-
-        $applicant = $payment->applicant;
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.invoice', compact('payment', 'applicant'));
         
         return $pdf->stream('invoice-' . $payment->id . '.pdf');

@@ -11,7 +11,24 @@ class PaymentController extends Controller
 {
     public function index(Request $request)
     {
+        $user = auth()->user();
+        $isPropertyManager = $user && $user->isPropertyManager();
+        $assignedPropertyIds = $isPropertyManager ? $user->getAssignedPropertyIds() : [];
+        $assignedPropertyNames = $isPropertyManager ? $user->getAssignedPropertyNames() : [];
+
         $query = Payment::with(['applicant.personalInformation', 'user']);
+
+        // Scope strictly to assigned properties for Property Managers
+        if ($isPropertyManager) {
+            $query->whereHas('applicant', function ($qa) use ($assignedPropertyIds, $assignedPropertyNames) {
+                $qa->where(function ($q) use ($assignedPropertyIds, $assignedPropertyNames) {
+                    $q->whereIn('property_id', $assignedPropertyIds);
+                    if (!empty($assignedPropertyNames)) {
+                        $q->orWhereIn('property_name', $assignedPropertyNames);
+                    }
+                });
+            });
+        }
 
         if ($request->has('search') && !empty($request->get('search'))) {
             $search = $request->get('search');
@@ -72,7 +89,24 @@ class PaymentController extends Controller
 
     public function export(Request $request)
     {
+        $user = auth()->user();
+        $isPropertyManager = $user && $user->isPropertyManager();
+        $assignedPropertyIds = $isPropertyManager ? $user->getAssignedPropertyIds() : [];
+        $assignedPropertyNames = $isPropertyManager ? $user->getAssignedPropertyNames() : [];
+
         $query = Payment::with(['applicant.personalInformation', 'user']);
+
+        // Scope strictly to assigned properties for Property Managers
+        if ($isPropertyManager) {
+            $query->whereHas('applicant', function ($qa) use ($assignedPropertyIds, $assignedPropertyNames) {
+                $qa->where(function ($q) use ($assignedPropertyIds, $assignedPropertyNames) {
+                    $q->whereIn('property_id', $assignedPropertyIds);
+                    if (!empty($assignedPropertyNames)) {
+                        $q->orWhereIn('property_name', $assignedPropertyNames);
+                    }
+                });
+            });
+        }
 
         if ($request->has('search') && !empty($request->get('search'))) {
             $search = $request->get('search');

@@ -24,11 +24,28 @@ class AdminMiddleware
             return redirect()->guest(route('login'));
         }
 
-        if (!$user->isAdmin() && !$user->isSuperAdmin() && !in_array(strtolower($user->role ?? ''), ['admin', 'superadmin'])) {
+        if (!$user->isAdmin() && !$user->isSuperAdmin() && !$user->isPropertyManager() && !in_array(strtolower($user->role ?? ''), ['admin', 'superadmin', 'property_manager'])) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
             }
             return redirect()->route('dashboard')->with('error', 'Unauthorized. Admin access required.');
+        }
+
+        // Property Manager role can only access Applications and Payments
+        if ($user->isPropertyManager() || $user->role === 'property_manager') {
+            if ($request->is('admin/users*') || 
+                $request->is('admin/email-logs*') || 
+                $request->is('admin/settings*') || 
+                $request->is('admin/properties*')) {
+                if ($request->expectsJson() || $request->is('api/*')) {
+                    return response()->json(['message' => 'Unauthorized. Property Managers cannot access this section.'], 403);
+                }
+                return redirect()->route('admin.applications.index')->with('error', 'Unauthorized. Property Managers can only access Applications and Payments for assigned properties.');
+            }
+
+            if ($request->is('admin/dashboard') || $request->routeIs('admin.dashboard')) {
+                return redirect()->route('admin.applications.index');
+            }
         }
 
         return $next($request);

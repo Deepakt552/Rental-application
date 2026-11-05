@@ -15,7 +15,7 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        $query = User::query();
+        $query = User::with('properties:id,property_name');
 
         // Search functionality
         if ($request->has('search') && $request->search) {
@@ -49,7 +49,8 @@ class UserController extends Controller
             'total' => User::count(),
             'admins' => User::where('role', 'admin')->count(),
             'users' => User::where('role', 'user')->count(),
-            'superadmin' => User::where('role', 'superadmin')->count(), 
+            'superadmin' => User::where('role', 'superadmin')->count(),
+            'property_managers' => User::where('role', 'property_manager')->count(),
         ];
 
         return Inertia::render('Admin/Users/Index', [
@@ -69,7 +70,7 @@ class UserController extends Controller
      */
     public function export(Request $request)
     {
-        $query = User::query();
+        $query = User::with('properties:id,property_name');
 
         // Search functionality
         if ($request->has('search') && $request->search) {
@@ -106,7 +107,7 @@ class UserController extends Controller
             "Expires"             => "0"
         ];
 
-        $columns = ['ID', 'Name', 'Email', 'Role', 'Created At'];
+        $columns = ['ID', 'Name', 'Email', 'Role', 'Assigned Properties', 'Can Edit Applications', 'Created At'];
 
         $callback = function() use($users, $columns) {
             $file = fopen('php://output', 'w');
@@ -116,10 +117,12 @@ class UserController extends Controller
                 $row['ID'] = $user->id;
                 $row['Name'] = $user->name;
                 $row['Email'] = $user->email;
-                $row['Role'] = $user->role;
+                $row['Role'] = $user->role === 'property_manager' ? 'Property Manager' : ucfirst($user->role);
+                $row['Assigned Properties'] = $user->properties->pluck('property_name')->join(', ');
+                $row['Can Edit Applications'] = $user->role === 'property_manager' ? ($user->can_edit_applications ? 'Yes' : 'No') : 'N/A';
                 $row['Created At'] = $user->created_at->format('Y-m-d H:i:s');
 
-                fputcsv($file, array($row['ID'], $row['Name'], $row['Email'], $row['Role'], $row['Created At']));
+                fputcsv($file, array($row['ID'], $row['Name'], $row['Email'], $row['Role'], $row['Assigned Properties'], $row['Can Edit Applications'], $row['Created At']));
             }
 
             fclose($file);
@@ -133,7 +136,11 @@ class UserController extends Controller
      */
     public function create()
     {
-        return Inertia::render('Admin/Users/Create');
+        $properties = \App\Models\Property::select('id', 'property_name', 'company_name', 'property_code')->orderBy('property_name')->get();
+
+        return Inertia::render('Admin/Users/Create', [
+            'properties' => $properties
+        ]);
     }
 
     /**
@@ -145,15 +152,29 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:user,admin,superadmin',
+            'role' => 'required|in:user,admin,superadmin,property_manager',
+            'property_ids' => 'nullable|array',
+            'property_ids.*' => 'exists:properties,id',
+            'can_edit_applications' => 'nullable|boolean',
         ]);
+
+        if ($validated['role'] === 'property_manager' && empty($validated['property_ids'])) {
+            return back()->withErrors(['property_ids' => 'Please select at least one property for the Property Manager.'])->withInput();
+        }
+
+        $canEdit = $validated['role'] === 'property_manager' ? (bool) $request->input('can_edit_applications', false) : false;
 
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
+            'can_edit_applications' => $canEdit,
         ]);
+
+        if ($validated['role'] === 'property_manager' && !empty($validated['property_ids'])) {
+            $user->properties()->sync($validated['property_ids']);
+        }
 
         return redirect()->route('admin.users.index')
             ->with('success', 'User created successfully!');
@@ -164,9 +185,19 @@ class UserController extends Controller
      */
     public function edit($id)
     {
-        $user = User::findOrFail($id);
+        $user = User::with('properties:id,property_name')->findOrFail($id);
+        $properties = \App\Models\Property::select('id', 'property_name', 'company_name', 'property_code')->orderBy('property_name')->get();
+
         return Inertia::render('Admin/Users/Edit', [
-            'user' => $user
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'can_edit_applications' => (bool) $user->can_edit_applications,
+                'property_ids' => $user->properties->pluck('id')->toArray(),
+            ],
+            'properties' => $properties
         ]);
     }
 
@@ -180,14 +211,24 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
-            'role' => 'required|in:user,admin,superadmin',
+            'role' => 'required|in:user,admin,superadmin,property_manager',
+            'property_ids' => 'nullable|array',
+            'property_ids.*' => 'exists:properties,id',
+            'can_edit_applications' => 'nullable|boolean',
             'password' => 'nullable|string|min:8|confirmed',
         ]);
+
+        if ($validated['role'] === 'property_manager' && empty($validated['property_ids'])) {
+            return back()->withErrors(['property_ids' => 'Please select at least one property for the Property Manager.'])->withInput();
+        }
+
+        $canEdit = $validated['role'] === 'property_manager' ? (bool) $request->input('can_edit_applications', false) : false;
 
         $updateData = [
             'name' => $validated['name'],
             'email' => $validated['email'],
             'role' => $validated['role'],
+            'can_edit_applications' => $canEdit,
         ];
 
         if (!empty($validated['password'])) {
@@ -196,6 +237,12 @@ class UserController extends Controller
 
         $user->update($updateData);
 
+        if ($validated['role'] === 'property_manager') {
+            $user->properties()->sync($validated['property_ids'] ?? []);
+        } else {
+            $user->properties()->detach();
+        }
+
         return redirect()->route('admin.users.index')
             ->with('success', 'User updated successfully!');
     }
@@ -203,8 +250,6 @@ class UserController extends Controller
     /**
      * Remove the specified user.
      */
-
-
     public function destroy(Request $request, $id)
     {
         $user = User::findOrFail($id);
@@ -226,6 +271,7 @@ class UserController extends Controller
         return redirect()->route('admin.users.index')
             ->with('success', 'User deleted successfully!');
     }
+
     /**
      * Change user role.
      */
@@ -234,7 +280,7 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         $request->validate([
-            'role' => 'required|in:user,admin,superadmin',
+            'role' => 'required|in:user,admin,superadmin,property_manager',
         ]);
         $authUser = $request->user();
 

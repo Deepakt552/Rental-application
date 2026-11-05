@@ -38,6 +38,10 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('admin.dashboard');
         }
 
+        if ($user->isPropertyManager() || $user->role === 'property_manager') {
+            return redirect()->route('admin.applications.index');
+        }
+
         return redirect()->route('dashboard');
     }
 

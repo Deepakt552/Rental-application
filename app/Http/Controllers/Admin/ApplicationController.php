@@ -22,6 +22,11 @@ class ApplicationController extends Controller
 
     public function dashboard()
     {
+        $user = auth()->user();
+        if ($user && $user->isPropertyManager()) {
+            return redirect()->route('admin.applications.index');
+        }
+
         // Get latest applicants for the dashboard overview with essential relationships
         $applicants = Applicant::with([
             'personalInformation',
@@ -195,7 +200,22 @@ class ApplicationController extends Controller
 
      public function index(Request $request)
     {
+        $user = auth()->user();
+        $isPropertyManager = $user && $user->isPropertyManager();
+        $assignedPropertyIds = $isPropertyManager ? $user->getAssignedPropertyIds() : [];
+        $assignedPropertyNames = $isPropertyManager ? $user->getAssignedPropertyNames() : [];
+
         $query = Applicant::with(['personalInformation', 'currentAddress', 'consentRecord', 'property']);
+
+        // Scope strictly to assigned properties for Property Managers
+        if ($isPropertyManager) {
+            $query->where(function ($q) use ($assignedPropertyIds, $assignedPropertyNames) {
+                $q->whereIn('property_id', $assignedPropertyIds);
+                if (!empty($assignedPropertyNames)) {
+                    $q->orWhereIn('property_name', $assignedPropertyNames);
+                }
+            });
+        }
 
         // CRITICAL: Apply type filter FIRST
         if ($request->has('type') && in_array($request->get('type'), ['admin', 'superadmin'])) {
@@ -322,9 +342,21 @@ class ApplicationController extends Controller
         ]));
 
         // Get TOTAL counts from database (without pagination limit)
-        $totalAdmin = Applicant::where('type', 'admin')->count();
-        $totalSuperAdmin = Applicant::where('type', 'superadmin')->count();
-        $submittedCount = Applicant::where('status', 'submitted')->count();
+        if ($isPropertyManager) {
+            $propScope = function ($q) use ($assignedPropertyIds, $assignedPropertyNames) {
+                $q->whereIn('property_id', $assignedPropertyIds);
+                if (!empty($assignedPropertyNames)) {
+                    $q->orWhereIn('property_name', $assignedPropertyNames);
+                }
+            };
+            $totalAdmin = Applicant::where('type', 'admin')->where($propScope)->count();
+            $totalSuperAdmin = Applicant::where('type', 'superadmin')->where($propScope)->count();
+            $submittedCount = Applicant::where('status', 'submitted')->where($propScope)->count();
+        } else {
+            $totalAdmin = Applicant::where('type', 'admin')->count();
+            $totalSuperAdmin = Applicant::where('type', 'superadmin')->count();
+            $submittedCount = Applicant::where('status', 'submitted')->count();
+        }
 
         return Inertia::render('Admin/Applications', [
             'applicants' => $applicants,
@@ -347,6 +379,28 @@ class ApplicationController extends Controller
         ]);
     }
 
+    /**
+     * Ensure property managers only access applicants for their assigned properties.
+     * Optionally enforce that editing permissions are enabled.
+     */
+    private function authorizeApplicantAccess(Applicant $applicant, bool $requireEdit = false): void
+    {
+        $user = auth()->user();
+        if ($user && $user->isPropertyManager()) {
+            $assignedIds = $user->getAssignedPropertyIds();
+            $assignedNames = $user->getAssignedPropertyNames();
+            $isAssigned = ($applicant->property_id && in_array($applicant->property_id, $assignedIds)) ||
+                          ($applicant->property_name && in_array($applicant->property_name, $assignedNames));
+            if (!$isAssigned) {
+                abort(403, 'Unauthorized. This application does not belong to your assigned properties.');
+            }
+
+            if ($requireEdit && !$user->canEditApplications()) {
+                abort(403, 'Unauthorized. You do not have permission to edit applications or details.');
+            }
+        }
+    }
+
     public function show($id)
     {
         $applicant = Applicant::with([
@@ -365,6 +419,8 @@ class ApplicationController extends Controller
             'property'
         ])->findOrFail($id);
 
+        $this->authorizeApplicantAccess($applicant);
+
         $applicant->is_consent_completed = $applicant->consentRecord?->status === 'completed';
 
 
@@ -381,6 +437,7 @@ class ApplicationController extends Controller
         ]);
 
         $applicant = Applicant::with(['personalInformation'])->findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
 
         $phone = $request->phone ?: $applicant->personalInformation?->phone;
 
@@ -416,6 +473,7 @@ class ApplicationController extends Controller
         ]);
 
         $applicant = Applicant::with(['personalInformation'])->findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
 
         if ($applicant->reminders_opted_out) {
             return redirect()->back()->withErrors([
@@ -456,6 +514,7 @@ class ApplicationController extends Controller
     public function toggleReminders(Request $request, $id)
     {
         $applicant = Applicant::findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
         $newState = !$applicant->reminders_opted_out;
         $applicant->update([
             'reminders_opted_out' => $newState,
@@ -470,6 +529,7 @@ class ApplicationController extends Controller
     public function resend($id)
     {
         $applicant = Applicant::findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
         $type = $applicant->type ?? 'admin';
         $emailService = app(\App\Services\EmailService::class);
         $emailService->sendAllApplicationEmails($applicant, $type);
@@ -480,6 +540,7 @@ class ApplicationController extends Controller
     public function destroy($id)
     {
         $applicant = Applicant::findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
         $userId = $applicant->user_id;
 
         // Delete application records & files
@@ -503,6 +564,7 @@ class ApplicationController extends Controller
         ]);
 
         $applicant = Applicant::findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
         $applicant->update([
             'admin_comment' => $request->admin_comment
         ]);
@@ -524,7 +586,16 @@ class ApplicationController extends Controller
         ]);
 
         $applicant = Applicant::findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
         $property = Property::findOrFail($request->property_id);
+
+        $user = auth()->user();
+        if ($user && $user->isPropertyManager()) {
+            $assignedIds = $user->getAssignedPropertyIds();
+            if (!in_array($property->id, $assignedIds)) {
+                abort(403, 'Unauthorized. You can only assign properties that belong to your assigned properties.');
+            }
+        }
 
         $applicant->update([
             'property_id' => $property->id,
@@ -541,7 +612,21 @@ class ApplicationController extends Controller
 
     public function export(Request $request)
     {
+        $user = auth()->user();
+        $isPropertyManager = $user && $user->isPropertyManager();
+        $assignedPropertyIds = $isPropertyManager ? $user->getAssignedPropertyIds() : [];
+        $assignedPropertyNames = $isPropertyManager ? $user->getAssignedPropertyNames() : [];
+
         $query = Applicant::with(['personalInformation', 'currentAddress', 'consentRecord', 'property']);
+
+        if ($isPropertyManager) {
+            $query->where(function ($q) use ($assignedPropertyIds, $assignedPropertyNames) {
+                $q->whereIn('property_id', $assignedPropertyIds);
+                if (!empty($assignedPropertyNames)) {
+                    $q->orWhereIn('property_name', $assignedPropertyNames);
+                }
+            });
+        }
 
         if ($request->has('type') && in_array($request->get('type'), ['admin', 'superadmin'])) {
             $query->where('type', $request->get('type'));
@@ -727,6 +812,7 @@ class ApplicationController extends Controller
         ]);
 
         $applicant = Applicant::findOrFail($id);
+        $this->authorizeApplicantAccess($applicant, true);
         $statusVal = $request->input('move_in_status');
         $applicant->move_in_status = ($statusVal === '' || $statusVal === 'pending') ? null : $statusVal;
         $applicant->save();
@@ -745,6 +831,7 @@ class ApplicationController extends Controller
 
         try {
             $applicant = Applicant::findOrFail($id);
+            $this->authorizeApplicantAccess($applicant, true);
             $file = $request->file('file');
             $originalName = $file->getClientOriginalName();
             $extension = $file->getClientOriginalExtension();
@@ -794,6 +881,8 @@ class ApplicationController extends Controller
     public function deleteDocument($id, $documentId)
     {
         try {
+            $applicant = Applicant::findOrFail($id);
+            $this->authorizeApplicantAccess($applicant, true);
             $document = \App\Models\ApplicantDocument::where('applicant_id', $id)->findOrFail($documentId);
 
             // Delete physical file safely from disk
